@@ -1,2 +1,58 @@
-# Ignorar la carpeta del entorno virtual de Python
+# ── Entornos virtuales ──────────────────────────────────────────────
+venv/
 .venv/
+.env
+
+# ── Caché de Python ──────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# ── Embeddings / features ────────────────────────────────────────────
+features/
+
+# ── Imágenes del dataset ─────────────────────────────────────────────
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+
+# ── CSVs pesados de resultados ───────────────────────────────────────
+benchmark_results/
+predictions_*.csv
+
+# ── Modelos descargados ──────────────────────────────────────────────
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.pt
+
+# ── Caché de HuggingFace ─────────────────────────────────────────────
+.cache/huggingface/
+~/.cache/huggingface/
+
+# ── Jupyter ──────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── IDEs ─────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+
+# ── Sistema operativo ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Explícitamente trackeados (no ignorar) ───────────────────────────
+!Indice_Valor_Conservacion_Misiones.csv
+!dataset_index.csv
+!**/*.py
+!requirements.txt
