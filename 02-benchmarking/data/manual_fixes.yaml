@@ -1,0 +1,52 @@
+# Correcciones manuales de nombres taxonómicos para el dataset regional
+# del Bosque Atlántico de Misiones.
+#
+# Propósito: cubrir dos casos que el CSV de IVC no resuelve solo:
+#
+#   aliases:   subespecies presentes en los nombres de carpeta de imágenes
+#              que deben mapearse a la especie principal del CSV de IVC.
+#              El script buscará el valor (alias) en el CSV y usará su score.
+#
+#   hardcoded: especies sin entrada en el CSV (exóticas, domésticas, o
+#              nativas con estado LC no incluidas) a las que se asigna
+#              ivc_score e ivc_category directamente, sin consultar el CSV.
+
+aliases:
+  tapirus terrestris terrestris: tapirus terrestris
+  leopardus pardalis mitis: leopardus pardalis
+  conopophaga lineata vulgaris: conopophaga lineata
+  alouatta guariba: alouatta guariba clamitans  # subespecie local asumida
+  odontophorus capueira capueira: odontophorus capueira
+  puma concolor concolor: puma concolor
+
+hardcoded:
+  # Exóticas / Domésticas — sin valor de conservación nativo
+  axis axis:
+    ivc_score: 0
+    ivc_category: "Exótica/Invasora"
+  canis familiaris:
+    ivc_score: 0
+    ivc_category: "Doméstica"
+  sus scrofa:
+    ivc_score: 0
+    ivc_category: "Exótica/Invasora"
+  sus scrofa domesticus:
+    ivc_score: 0
+    ivc_category: "Doméstica"
+  lepus europaeus:
+    ivc_score: 0
+    ivc_category: "Exótica/Invasora"
+
+  # Nativas faltantes en el CSV — estado LC (Preocupación Menor) → Bajo
+  dasypus novemcinctus:  # Tatú mulita
+    ivc_score: 1
+    ivc_category: "Bajo"
+  euphractus sexcinctus:  # Tatú poyú
+    ivc_score: 1
+    ivc_category: "Bajo"
+  strix virgata:  # Lechuza
+    ivc_score: 1
+    ivc_category: "Bajo"
+  strix virgata borelliana:
+    ivc_score: 1
+    ivc_category: "Bajo"

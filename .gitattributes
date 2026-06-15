@@ -1,0 +1,3 @@
+# Normalización de line endings: todos los archivos de texto se almacenan
+# con LF en el repositorio, independientemente del OS del committer.
+* text=auto eol=lf

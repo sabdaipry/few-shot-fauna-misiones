@@ -2,6 +2,7 @@
 integrando puntajes IVC y asignando splits galería/query por especie."""
 import sys
 import os
+import yaml
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -17,8 +18,9 @@ sys.path.append(str(project_root))
 # --- IMPORTACIÓN DEL LOGGER ---
 try:
     from src.utils.logger import setup_logger
+    from src.config import DATA_DIR
 except ImportError:
-    print("Error: No se encuentra el módulo 'src.utils.logger'.")
+    print("Error: No se encuentra el módulo 'src.utils.logger' o 'src.config'.")
     sys.exit(1)
 
 
@@ -27,35 +29,30 @@ except ImportError:
 DATASET_ROOT = project_root / "data/fauna_seleccionada_bosque_atlantico/images"
 OUTPUT_CSV = project_root / "data/dataset_index.csv"
 IVC_CSV_PATH = project_root / "data/Indice_Valor_Conservacion_Misiones.csv"
+MANUAL_FIXES_PATH = DATA_DIR / "manual_fixes.yaml"
 SEED = 29  # Semilla para que el random sea siempre igual
 
 logger = setup_logger("index_generator", log_dir=project_root / "logs")
 
-MANUAL_FIXES = {
-    # --- SUBESPECIES -> MAPEAR A ESPECIE PRINCIPAL DEL CSV ---
-    "tapirus terrestris terrestris": "tapirus terrestris",
-    "leopardus pardalis mitis": "leopardus pardalis",
-    "conopophaga lineata vulgaris": "conopophaga lineata",
-    "alouatta guariba": "alouatta guariba clamitans",  # Asumiendo que es la subespecie local
-    "odontophorus capueira capueira": "odontophorus capueira",
-    "puma concolor concolor": "puma concolor",
 
-    # --- EXÓTICAS / DOMÉSTICAS (Valor 0) ---
-    "axis axis": {"ivc_score": 0, "ivc_category": "Exótica/Invasora"},
-    "canis familiaris": {"ivc_score": 0, "ivc_category": "Doméstica"},
-    "sus scrofa": {"ivc_score": 0, "ivc_category": "Exótica/Invasora"},
-    "sus scrofa domesticus": {"ivc_score": 0, "ivc_category": "Doméstica"},
-    "lepus europaeus": {"ivc_score": 0, "ivc_category": "Exótica/Invasora"},
+def load_manual_fixes(yaml_path: Path) -> tuple[dict, dict]:
+    """Carga aliases y hardcoded desde el YAML de correcciones manuales."""
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        aliases = data.get("aliases", {}) or {}
+        hardcoded = data.get("hardcoded", {}) or {}
+        logger.info(f"-> Manual fixes cargados: {len(aliases)} aliases, {len(hardcoded)} hardcoded.")
+        return aliases, hardcoded
+    except FileNotFoundError:
+        logger.error(f"Archivo de correcciones manuales no encontrado: {yaml_path}")
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        logger.error(f"Error leyendo {yaml_path}: {e}")
+        sys.exit(1)
 
-    # --- NATIVAS FALTANTES (Asignación manual de valor base) ---
-    # Dasypus novemcinctus (Tatú mulita) -> LC (Preocupación Menor)
-    "dasypus novemcinctus": {"ivc_score": 1, "ivc_category": "Bajo"},
-    # Euphractus sexcinctus (Tatú poyú) -> LC
-    "euphractus sexcinctus": {"ivc_score": 1, "ivc_category": "Bajo"},
-    # Strix virgata (Lechuza) -> LC
-    "strix virgata": {"ivc_score": 1, "ivc_category": "Bajo"},
-    "strix virgata borelliana": {"ivc_score": 1, "ivc_category": "Bajo"}
-}
+
+ALIASES, HARDCODED = load_manual_fixes(MANUAL_FIXES_PATH)
 
 def normalize_name(name):
     """
@@ -175,24 +172,21 @@ def generate_index():
 
                     # A) Revisar correcciones manuales primero
                     match_found = False
-                    
-                    # Chequeamos ambos candidatos contra el diccionario de fixes
+
+                    # Chequeamos ambos candidatos contra aliases y hardcoded
                     for cand in [candidate_name_a, candidate_name_b]:
-                        if cand in MANUAL_FIXES:
-                            fix = MANUAL_FIXES[cand]
-                            if isinstance(fix, dict):
-                                # Es un valor hardcodeado (ej. Exótica)
-                                ivc_data = fix
+                        if cand in HARDCODED:
+                            ivc_data = HARDCODED[cand]
+                            match_found = True
+                        elif cand in ALIASES:
+                            alias_target = ALIASES[cand]
+                            if alias_target in ivc_lookup:
+                                ivc_data = ivc_lookup[alias_target]
                                 match_found = True
-                            elif isinstance(fix, str):
-                                # Es un alias (ej. Subespecie -> Especie CSV)
-                                # Buscamos el alias en el CSV lookup
-                                if fix in ivc_lookup:
-                                    ivc_data = ivc_lookup[fix]
-                                    match_found = True
-                                else:
-                                    logger.warning(f"Mapeo manual fallido: {cand} -> {fix} (No está en CSV)")
-                            if match_found: break
+                            else:
+                                logger.warning(f"Mapeo manual fallido: {cand} -> {alias_target} (No está en CSV)")
+                        if match_found:
+                            break
                     
                     # B) Si no hubo fix manual, buscar en CSV normal
                     if not match_found:
@@ -289,7 +283,7 @@ def generate_index():
     # Guardar
     df = pd.DataFrame(data_rows)
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
-    df.to_csv(OUTPUT_CSV, index=False)
+    df.to_csv(OUTPUT_CSV, index=False, lineterminator="\n")
     
     logger.info(f"-> Índice generado exitosamente en: {OUTPUT_CSV}")
     
