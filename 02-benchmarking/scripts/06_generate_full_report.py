@@ -104,6 +104,7 @@ def main():
     # ii. Eficiencia (Pareto, Latencia Barras)
     logger.info("Generando gráficos de eficiencia...")
     viz.plot_pareto(data['summary'], data['times'], "Accuracy", FIG_DIR / "02_pareto_acc.png")
+    viz.plot_pareto(data['summary'], data['times'], "F1_Macro", FIG_DIR / "02_pareto_f1.png")
     viz.plot_backbone_latency(data['times'], FIG_DIR / "latency_backbone.png")
     viz.plot_classifier_latency(data['summary'], FIG_DIR / "latency_classifier.png")
     
