@@ -1,0 +1,54 @@
+# Mapeo de familia biológica -> clase taxonómica (Mammalia/Aves/Reptilia)
+# para el análisis de errores cross-clase del benchmark.
+# Verificado contra dataset_index.csv (45 familias, 91 especies, 4562 imágenes).
+
+Mammalia:
+  - Atelidae
+  - Canidae
+  - Caviidae
+  - Cebidae
+  - Cervidae
+  - Chlamyphoridae
+  - Cuniculidae
+  - Dasypodidae
+  - Dasyproctidae
+  - Didelphidae
+  - Echimyidae
+  - Felidae
+  - Leporidae
+  - Mustelidae
+  - Myrmecophagidae
+  - Procyonidae
+  - Suidae
+  - Tapiridae
+  - Tayassuidae
+
+Aves:
+  - Bucconidae
+  - Caprimulgidae
+  - Cardinalidae
+  - Columbidae
+  - Conopophagidae
+  - Corvidae
+  - Cracidae
+  - Formicariidae
+  - Furnariidae
+  - Grallariidae
+  - Momotidae
+  - Odontophoridae
+  - Parulidae
+  - Picidae
+  - Pipridae
+  - Psittacidae
+  - Rallidae
+  - Ramphastidae
+  - Strigidae
+  - Thamnophilidae
+  - Thraupidae
+  - Tinamidae
+  - Turdidae
+  - Tyrannidae
+
+Reptilia:
+  - Chelidae
+  - Teiidae
