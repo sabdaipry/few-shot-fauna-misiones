@@ -19,6 +19,10 @@ sys.path.append(str(project_root))
 
 from src.utils.logger import setup_logger
 from src.benchmarking import ModelEvaluator
+from src.config import (
+    DATASET_INDEX_PATH, FEATURES_DIR, BENCHMARK_RESULTS_DIR,
+    BACKBONES_TIMES_PATH, INCREMENTAL_RESULTS_PATH, OUTLIER_RESULTS_PATH,
+)
 
 # Configuración del logger
 logger = setup_logger("system-tests")
@@ -213,25 +217,22 @@ def main():
     logger.info("==============================================")
 
 
-    INDEX_PATH = "data/dataset_index.csv"
-    FEATURES_DIR = "data/features"
-    SUMMARY_FILE = "data/benchmark_results/benchmark_summary.csv"
-    BACKBONE_TIMES_FILE = "data/backbones_times.csv"
-
     backbone_times = {}
-    if os.path.exists(BACKBONE_TIMES_FILE):
-        df_bb = pd.read_csv(BACKBONE_TIMES_FILE)
+    if os.path.exists(BACKBONES_TIMES_PATH):
+        df_bb = pd.read_csv(BACKBONES_TIMES_PATH)
         backbone_times = dict(zip(df_bb['Embedding Model'], df_bb['Backbone Time (ms)']))
         logger.info(f"Tiempos de backbone cargados para {len(backbone_times)} modelos.")
-
 
     # Selección Automática
     # - Mejores F1-Score (Top 5)
     # - Más Rápidos (Top 5)
-    MODELS = get_target_models(SUMMARY_FILE, BACKBONE_TIMES_FILE)
+    MODELS = get_target_models(
+        BENCHMARK_RESULTS_DIR / "benchmark_summary.csv",
+        BACKBONES_TIMES_PATH,
+    )
     logger.info(f"- Modelos a evaluar: {len(MODELS)}")
 
-    evaluator = ModelEvaluator(INDEX_PATH, FEATURES_DIR)
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
 
     res_incremental = []
     res_outliers = []
@@ -259,19 +260,19 @@ def main():
         if out_data: res_outliers.append(out_data)
 
     # Guardar
-    if res_incremental: 
-        pd.DataFrame(res_incremental).to_csv("data/incremental_results.csv", index=False)
+    if res_incremental:
+        pd.DataFrame(res_incremental).to_csv(INCREMENTAL_RESULTS_PATH, index=False)
         logger.info("\n--- ACTUALIZACIÓN INCREMENTAL (Simulación 5 especies) ---" \
         f"\n{pd.DataFrame(res_incremental)[['Embedding Model', 'Total Time (s)', 'Avg Time per Class (s)']].sort_values('Avg Time per Class (s)').to_string(index=False)}")
-        
-        logger.info("Resultados de Test Incremental guardados en: data/incremental_results.csv")
+
+        logger.info(f"Resultados de Test Incremental guardados en: {INCREMENTAL_RESULTS_PATH}")
     if res_outliers:
-        df_out = pd.DataFrame(res_outliers) 
-        df_out.to_csv("data/outlier_results.csv", index=False)
+        df_out = pd.DataFrame(res_outliers)
+        df_out.to_csv(OUTLIER_RESULTS_PATH, index=False)
         logger.info("\n--- DETECCIÓN DE OUTLIERS (Trade-off) ---" \
         f"\n{df_out[['Embedding Model', 'Precision Outliers', 'Recall Outliers', 'False Alarm Rate']].sort_values('Recall Outliers', ascending=False).to_string(index=False)}")
-        
-        logger.info("Resultados de Test Outliers guardados en: data/outlier_results.csv")
+
+        logger.info(f"Resultados de Test Outliers guardados en: {OUTLIER_RESULTS_PATH}")
 
         logger.info("Tests de Sistema finalizados.")
 

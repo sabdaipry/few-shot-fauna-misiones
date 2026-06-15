@@ -25,6 +25,7 @@ project_root = current_script_path.parent.parent
 sys.path.append(str(project_root))
 
 from src.utils.logger import setup_logger
+from src.config import MODELS_TO_TEST, DATASET_INDEX_PATH, BACKBONES_TIMES_PATH
 from src.backbones import (
     ResNet50Extractor,
     DinoV2Extractor,
@@ -173,37 +174,20 @@ def main():
     logger.info("   FASE 4: PROFILING DE BACKBONES")
     logger.info("==============================================")
 
-    INDEX_PATH = "data/dataset_index.csv"
-    OUTPUT_FILE = "data/backbones_times.csv"
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Hardware de Profiling: {device.type.upper()}")
 
     # Obtener imagen de muestra
-    if not os.path.exists(INDEX_PATH):
-        logger.error(f"No se encontró el índice del dataset en {INDEX_PATH}")
+    if not os.path.exists(DATASET_INDEX_PATH):
+        logger.error(f"No se encontró el índice del dataset en {DATASET_INDEX_PATH}")
         return
-    df = pd.read_csv(INDEX_PATH)
+    df = pd.read_csv(DATASET_INDEX_PATH)
     sample_image_path = df.iloc[0]['filepath']
-
-    models = [
-        "resnet50",
-        "convnextv2_tiny", "convnextv2_base",
-        "dinov2_small", "dinov2_base",
-        "dinov2_small_gap", "dinov2_base_gap",
-        "dinov3_small", "dinov3_base",
-        "dinov3_small_gap", "dinov3_base_gap",
-        "siglip_base", "siglip_so400m",
-        "siglip2_base", "siglip2_so400m",
-        "bioclip_v1", "bioclip_v2",
-        "clip_base", "clip_large"
-    ]
 
     results = []
 
-    
-    for i, model in enumerate(models):
-        logger.info(f"[{i+1}/{len(models)}] Profiling {model} ...")
+    for i, model in enumerate(MODELS_TO_TEST):
+        logger.info(f"[{i+1}/{len(MODELS_TO_TEST)}] Profiling {model} ...")
         avg, std = profile_model_latency(model, sample_image_path, device)
 
         if avg is not None:
@@ -216,11 +200,11 @@ def main():
             # Feedback visual inmediato
             logger.info(f"-> {model}: {avg:.2f} ms ± {std:.2f} ms on {device.type.upper()}")
         else:
-            logger.warning(f"-> No se pudo obtener resultados para {model}.")   
+            logger.warning(f"-> No se pudo obtener resultados para {model}.")
 
     if results:
-        pd.DataFrame(results).to_csv(OUTPUT_FILE, index=False)
-        logger.info(f"Resultados guardados en: {OUTPUT_FILE}")
+        pd.DataFrame(results).to_csv(BACKBONES_TIMES_PATH, index=False)
+        logger.info(f"Resultados guardados en: {BACKBONES_TIMES_PATH}")
     else:
         logger.warning("No se obtuvieron resultados de profiling.")
 

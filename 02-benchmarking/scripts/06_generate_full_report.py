@@ -12,6 +12,11 @@ sys.path.append(str(project_root))
 
 from src.benchmarking import ModelEvaluator
 from src.utils.logger import setup_logger
+from src.config import (
+    DATASET_INDEX_PATH, FEATURES_DIR, BENCHMARK_RESULTS_DIR, REPORTS_DIR,
+    BACKBONES_TIMES_PATH, SCALABILITY_RESULTS_PATH,
+    INCREMENTAL_RESULTS_PATH, OUTLIER_RESULTS_PATH,
+)
 import src.visualization as viz
 import src.reporting as rep
 import src.analysis as analysis
@@ -32,7 +37,7 @@ def main():
     logger.info("==============================================")
     
     # 1. Configurar Directorios
-    REPORT_DIR = Path("data/reports")
+    REPORT_DIR = REPORTS_DIR
     ASSETS_DIR = REPORT_DIR / "assets"
     FIG_DIR = REPORT_DIR / "figures"
     UMAP_DIR = FIG_DIR / "umaps"
@@ -46,14 +51,14 @@ def main():
     
     data = {}
     try:
-        data['summary'] = pd.read_csv("data/benchmark_results/benchmark_summary.csv")
-        data['times'] = pd.read_csv("data/backbones_times.csv")
-        data['scalability'] = pd.read_csv("data/scalability_results.csv")
-        data['incremental'] = pd.read_csv("data/incremental_results.csv")
-        data['outliers'] = pd.read_csv("data/outlier_results.csv")
+        data['summary'] = pd.read_csv(BENCHMARK_RESULTS_DIR / "benchmark_summary.csv")
+        data['times'] = pd.read_csv(BACKBONES_TIMES_PATH)
+        data['scalability'] = pd.read_csv(SCALABILITY_RESULTS_PATH)
+        data['incremental'] = pd.read_csv(INCREMENTAL_RESULTS_PATH)
+        data['outliers'] = pd.read_csv(OUTLIER_RESULTS_PATH)
 
         # Mapa de Familias
-        df_index = pd.read_csv("data/dataset_index.csv")
+        df_index = pd.read_csv(DATASET_INDEX_PATH)
 
         # Cargar estadisticas del dataset
         stats = {}
@@ -141,7 +146,7 @@ def main():
     
     umap_files = {}
     
-    evaluator = ModelEvaluator("data/dataset_index.csv", "data/features")
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
     import logging
     logging.getLogger("backbones").setLevel(logging.ERROR)
     
@@ -164,7 +169,7 @@ def main():
                 viz.plot_umap(embed_data[3], embed_data[4], model_name, out_umap, fam_map)
 
         # B. Gráficos Específicos por Clasificador (Errores e IVC)
-        pred_path = Path(f"data/benchmark_results/predictions_{model_name}.csv")
+        pred_path = BENCHMARK_RESULTS_DIR / f"predictions_{model_name}.csv"
         if pred_path.exists():
             df_pred = pd.read_csv(pred_path)
             

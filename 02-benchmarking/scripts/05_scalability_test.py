@@ -17,6 +17,10 @@ sys.path.append(str(project_root))
 
 from src.utils.logger import setup_logger
 from src.benchmarking import ModelEvaluator
+from src.config import (
+    MODELS_TO_TEST, DATASET_INDEX_PATH, FEATURES_DIR,
+    BACKBONES_TIMES_PATH, SCALABILITY_RESULTS_PATH,
+)
 # Configuración del logger
 logger = setup_logger("scalability-test")
 # Silenciar warnings de sklearn
@@ -29,12 +33,6 @@ def main():
     logger.info("   (Curvas de Degradación)")
     logger.info("==============================================")
 
-    # --- CONFIGURACIÓN ---
-    INDEX_PATH = "data/dataset_index.csv"
-    FEATURES_DIR = "data/features"
-    OUTPUT_DIR = "data/scalability_results.csv"
-    BACKBONES_TIMES_FILE = "data/backbones_times.csv"
-
     # Escalones de cantidad de especies a probar
     # (Ajustado al dataset de ~91 especies)
     STEPS = [5, 10, 20, 30, 50, 70, 91]
@@ -42,32 +40,18 @@ def main():
     # Cantidad de veces que repetimos el experimento para promediar (random seeds)
     ITERATIONS = 5
 
-    # Modelos a evaluar:
-    MODELS_TO_TEST = [
-        "resnet50",
-        "convnextv2_tiny", "convnextv2_base",
-        "dinov2_small", "dinov2_base",
-        "dinov2_small_gap", "dinov2_base_gap",
-        "dinov3_small", "dinov3_base",
-        "dinov3_small_gap", "dinov3_base_gap",
-        "siglip_base", "siglip_so400m",
-        "siglip2_base", "siglip2_so400m",
-        "bioclip_v1", "bioclip_v2",
-        "clip_base", "clip_large"
-    ]
-
     # Cargar tiempos de backbone (para sumar latencia real)
     backbone_times = {}
-    if os.path.exists(BACKBONES_TIMES_FILE):
-        df_bb = pd.read_csv(BACKBONES_TIMES_FILE)
+    if os.path.exists(BACKBONES_TIMES_PATH):
+        df_bb = pd.read_csv(BACKBONES_TIMES_PATH)
         # Crear diccionario {modelo: tiempo_ms}
         backbone_times = dict(zip(df_bb['Embedding Model'], df_bb['Backbone Time (ms)']))
         logger.info(f"Tiempos de backbone cargados para {len(backbone_times)} modelos.")
     else:
-        logger.warning(f"No se encontró el archivo de tiempos de backbones en {BACKBONES_TIMES_FILE}. Los tiempos de backbone no serán considerados.")
-    
+        logger.warning(f"No se encontró el archivo de tiempos de backbones en {BACKBONES_TIMES_PATH}. Los tiempos de backbone no serán considerados.")
+
     # Instanciar el evaluador
-    evaluator = ModelEvaluator(INDEX_PATH, FEATURES_DIR)
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
     results = []
 
     # Barra Maestra (Modelos)
@@ -206,10 +190,10 @@ def main():
     # Guardar resultados finales
     if results:
         df_results = pd.DataFrame(results)
-        df_results.to_csv(OUTPUT_DIR, index=False)
+        df_results.to_csv(SCALABILITY_RESULTS_PATH, index=False)
         logger.info("="*50)
         logger.info("PRUEBA DE ESCALABILIDAD FINALIZADA")
-        logger.info(f"Resultados guardados en: {OUTPUT_DIR}")
+        logger.info(f"Resultados guardados en: {SCALABILITY_RESULTS_PATH}")
 
         # Preview rápido
         logger.info("Vista previa de resultados (todas las clases):")
