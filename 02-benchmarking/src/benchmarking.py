@@ -1,3 +1,12 @@
+"""
+Clasificadores personalizados y orquestador de benchmark para embeddings de imágenes.
+
+Contiene:
+- FaissKNNClassifier: KNN acelerado con FAISS (IndexFlatIP, similitud coseno).
+- FaissNearestCentroid: clasificador por centroide más cercano con FAISS.
+- ModelEvaluator: orquesta la carga de embeddings, evaluación de clasificadores y
+  persistencia de resultados en CSV/Excel.
+"""
 
 import sys
 import os
@@ -19,7 +28,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, f1_score, precision_recall_fscore_support, 
                              top_k_accuracy_score, silhouette_score, davies_bouldin_score, 
                              calinski_harabasz_score)
-from sklearn.preprocessing import StandardScaler, Normalizer
+from sklearn.preprocessing import Normalizer
 from sklearn.exceptions import UndefinedMetricWarning
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
@@ -38,6 +47,8 @@ logger = setup_logger("benchmarking-module")
 
 # --- WRAPPER PARA FAISS KNN (Para que funcione como un clasificador de sklearn) ---
 class FaissKNNClassifier:
+    """KNN acelerado con FAISS usando similitud coseno (IndexFlatIP sobre vectores L2-normalizados)."""
+
     def __init__(self, k=5):
         self.k = k
         self.index = None
@@ -45,89 +56,92 @@ class FaissKNNClassifier:
         self.classes_ = None
 
     def fit(self, X, y):
+        """Indexa X en FAISS y guarda las etiquetas de entrenamiento."""
         self.y_train = np.array(y)
         self.classes_ = np.unique(y)
         d = X.shape[1]
         # Usamos IndexFlatIP (Inner Product) que es equivalente a Coseno si los vectores están normalizados
-        self.index = faiss.IndexFlatIP(d) 
+        self.index = faiss.IndexFlatIP(d)
         self.index.add(X.astype(np.float32))
 
     def predict(self, X):
-        # Buscamos los k vecinos más cercanos
+        """Retorna la etiqueta del vecino más cercano para cada muestra en X."""
         distances, indices = self.index.search(X.astype(np.float32), 1)
-        # Devolvemos las etiquetas correspondientes a los índices encontrados
         return self.y_train[indices.flatten()]
-    
+
     def predict_top_k(self, X, k=5):
-        # Para KNN, buscamos k vecinos y vemos cuáles son las clases más frecuentes
-        # Nota simplificada: Para Top-5 accuracy en KNN puro, a veces se usa 
-        # la distancia a los vecinos. Aquí usaremos la búsqueda directa.
-        # Si k del modelo es < top_k solicitado, ajustamos.
+        """Retorna una matriz [n_samples, k] con las etiquetas de los k vecinos más cercanos."""
         search_k = min(self.k, k)
         distances, indices = self.index.search(X.astype(np.float32), search_k)
         top_k_preds = []
         for i in range(len(X)):
-            # Obtenemos las etiquetas de los vecinos
             neighbor_labels = self.y_train[indices[i]]
-            # Las ordenamos por frecuencia (o distancia si quisieramos refinar)
-            # Para simplificar y hacerlo rápido: tomamos las clases únicas de los vecinos en orden
-            # (FAISS ya devuelve ordenado por distancia)
+            # FAISS ya devuelve ordenado por distancia; tomamos clases únicas en ese orden
             unique_labels = pd.unique(neighbor_labels)
 
-            # Rellenamo si faltan candidatos (poco probable con k suficiente)
+            # Rellenamos si faltan candidatos (poco probable con k suficiente)
             if len(unique_labels) < k:
-                unique_labels = np.pad(unique_labels, (0, k - len(unique_labels)), 
+                unique_labels = np.pad(unique_labels, (0, k - len(unique_labels)),
                                        mode='constant', constant_values=unique_labels[-1])
             top_k_preds.append(unique_labels[:k])
         return np.array(top_k_preds)
 
 class FaissNearestCentroid:
+    """Clasificador por centroide más cercano acelerado con FAISS (similitud coseno)."""
+
     def __init__(self):
         self.index = None
         self.centroid_labels = None
         self.classes_ = None
 
     def fit(self, X, y):
-        # 1. Calcular centroides (Promedios por clase)
+        """Calcula el centroide L2-normalizado de cada clase e indexa en FAISS."""
         self.classes_ = np.unique(y)
         self.centroid_labels = self.classes_
         centroids = []
         for cls in self.classes_:
-            # Filtramos los vectores de esa especie y calculamos el promedio
             cls_vectors = X[y == cls]
             centroids.append(cls_vectors.mean(axis=0))
-        
+
         centroids_vectors = np.array(centroids, dtype=np.float32)
 
-        # 2. Normalizar centroides (vital para que IndexFlatIP funcione como Coseno)
+        # Normalización L2: vital para que IndexFlatIP funcione como similitud coseno
         faiss.normalize_L2(centroids_vectors)
 
-        # 3. Crear índice FAISS con los centroides
         d = X.shape[1]
         self.index = faiss.IndexFlatIP(d)
         self.index.add(centroids_vectors)
 
     def predict(self, X):
+        """Retorna la etiqueta del centroide más cercano para cada muestra en X."""
         if self.index is None:
             return np.array([])
-        # Buscamos el centroide más cercano (k=1)
         distances, indices = self.index.search(X.astype(np.float32), 1)
         return self.centroid_labels[indices.flatten()]
-    
+
     def predict_top_k(self, X, k=5):
+        """Retorna una matriz [n_samples, k] con las etiquetas de los k centroides más cercanos."""
         if self.index is None:
             return np.array([])
-        # Buscamos los k centroides más cercanos
         distances, indices = self.index.search(X.astype(np.float32), k)
-        # Mapeamos índices a etiquetas
         return self.centroid_labels[indices]
 
 # ---  WRAPPER DE EVALUACIÓN DE MODELOS ---
 
 class ModelEvaluator:
-    def __init__(self, index_path, features_root_dir, output_dir="data/results"):
+    """
+    Orquesta el benchmark de modelos de embeddings contra una batería de clasificadores.
+
+    Carga embeddings pre-computados, normaliza, corre clasificadores y persiste resultados
+    de forma incremental (caché en CSV) para evitar re-cómputo ante interrupciones.
+    """
+
+    def __init__(self, index_path, features_root_dir,
+                 output_dir=None):
         self.index_df = pd.read_csv(index_path)
         self.features_root = Path(features_root_dir)
+        if output_dir is None:
+            output_dir = Path(__file__).resolve().parent.parent / "data" / "results"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -165,13 +179,16 @@ class ModelEvaluator:
 
     def load_embeddings(self, model_folder):
         """
-        Carga los embeddings para un modelo específico.
-        Retorna X_train, y_train, X_test, y_test
+        Carga los embeddings pre-computados de un modelo.
+
+        Retorna una tupla de 6 elementos:
+        (X_train, y_train, idx_train, X_test, y_test, idx_test).
+        En caso de error retorna (None, None, None, None, None, None).
         """
         model_dir = self.features_root / model_folder
         if not model_dir.exists():
             logger.warning(f"Carpeta no encontrada: {model_dir}")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
         X_train, y_train, idx_train = [], [], []
         X_test, y_test, idx_test = [], [], []
@@ -203,14 +220,18 @@ class ModelEvaluator:
                 missing += 1
 
         if len(X_train) == 0:
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
         return (np.array(X_train), np.array(y_train), np.array(idx_train),
                 np.array(X_test), np.array(y_test), np.array(idx_test))
     
     def calculate_embedding_metrics(self, X, y):
-        # Calcula métricas intrínsecas del espacio vectorial (Silhouette, DB)
-        # OJO: Silhouette es lento O(N^2). Usamos una muestra si son muchos datos.
+        """
+        Calcula métricas intrínsecas del espacio de embeddings: Silhouette (coseno),
+        Davies-Bouldin y Calinski-Harabasz. Usa muestreo si N > 5000 (Silhouette es O(N²)).
+
+        Retorna (silhouette, davies_bouldin, calinski_harabasz); en caso de error (-1, -1, -1).
+        """
         try:
             if len(X) > 5000: # Sampling si es gigante
                 indices = np.random.choice(len(X), 5000, replace=False)
@@ -414,15 +435,19 @@ class ModelEvaluator:
         # self.evaluated_models.add(model_name)
 
     def save_results(self, output_file="benchmark_results.csv"):
-        df = pd.DataFrame(self.results)
+        """
+        Exporta self.results_df ordenado por F1-Macro a CSV y, si openpyxl está disponible,
+        también a Excel. Retorna el DataFrame resultante.
+        """
+        df = self.results_df.copy()
         df.sort_values(by=['F1-Macro'], ascending=False, inplace=True)
         df.to_csv(output_file, index=False)
-        
-        # También guardar un Excel para visualización fácil
+
+        xlsx_file = str(output_file).replace(".csv", ".xlsx")
         try:
-            df.to_excel(output_file.replace(".csv", ".xlsx"), index=False)
-        except:
-            pass
-            
+            df.to_excel(xlsx_file, index=False)
+        except Exception as e:
+            logger.warning(f"No se pudo guardar Excel en {xlsx_file}: {e}")
+
         logger.info(f"-> Resultados guardados en {output_file}")
         return df
