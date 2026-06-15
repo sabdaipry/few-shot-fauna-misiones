@@ -1,0 +1,32 @@
+created_at: '2026-02-01T02:10:05.258471'
+data_provenance:
+  pipeline_stages:
+  - fetch_observations
+  - download_images
+  - deduplicate
+  - assess_quality
+  - select_samples
+  - organize_dataset
+  source: iNaturalist
+  total_observations_processed: 4944
+description: Dataset con fauna seleccionada para detección y clasificación de especies
+  capturadas con cámaras trampa
+geographic_coverage: {}
+images_per_species:
+  max: 70
+  mean: 54.32967032967033
+  min: 3
+  std: 21.536095407148967
+name: fauna_seleccionada_bosque_atlantico
+pipeline_version: 1.1.0-hierarchical
+quality_metrics:
+  max: 93.66231918158047
+  mean: 59.178015655579784
+  min: 30.045230249039523
+  std: 15.623904905726587
+source: iNaturalist
+temporal_coverage:
+  earliest: '1999-05-14'
+  latest: '2026-01-31'
+total_images: 4944
+total_species: 91

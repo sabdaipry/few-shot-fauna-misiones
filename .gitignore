@@ -51,6 +51,15 @@ predictions_*.csv
 .DS_Store
 Thumbs.db
 
+# ── Metadatos por imagen (huérfanos sin las imágenes correspondientes) ──
+02-benchmarking/data/fauna_seleccionada_bosque_atlantico/images/**/*.json
+
+# ── Logs de ejecución ────────────────────────────────────────────────
+02-benchmarking/logs/
+
+# ── Reporte HTML generado (se regenera al final del proyecto) ────────
+02-benchmarking/data/reports/*.html
+
 # ── Explícitamente trackeados (no ignorar) ───────────────────────────
 !Indice_Valor_Conservacion_Misiones.csv
 !dataset_index.csv

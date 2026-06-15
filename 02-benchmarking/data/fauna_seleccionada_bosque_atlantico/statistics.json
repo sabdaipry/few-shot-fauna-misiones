@@ -1,0 +1,983 @@
+{
+  "summary": {
+    "total_images": 4944,
+    "total_species": 91,
+    "total_genera": 73,
+    "total_families": 45,
+    "images_per_species_mean": 54.32967032967033,
+    "quality_overall_mean": 59.178015655579784
+  },
+  "by_species": [
+    {
+      "species_id": "43435",
+      "name": "Alouatta caraya",
+      "common_name": "",
+      "family": "Atelidae",
+      "genus": "Alouatta",
+      "count": 70,
+      "quality_mean": 66.14771428571429,
+      "quality_std": 10.07743578091011
+    },
+    {
+      "species_id": "147529",
+      "name": "Alouatta guariba clamitans",
+      "common_name": "",
+      "family": "Atelidae",
+      "genus": "Alouatta",
+      "count": 70,
+      "quality_mean": 63.78214285714286,
+      "quality_std": 11.679740321582146
+    },
+    {
+      "species_id": "74053",
+      "name": "Alouatta guariba",
+      "common_name": "",
+      "family": "Atelidae",
+      "genus": "Alouatta",
+      "count": 53,
+      "quality_mean": 53.00811320754717,
+      "quality_std": 12.050664752133638
+    },
+    {
+      "species_id": "18978",
+      "name": "Amazona aestiva",
+      "common_name": "",
+      "family": "Psittacidae",
+      "genus": "Amazona",
+      "count": 70,
+      "quality_mean": 54.72371428571429,
+      "quality_std": 10.866046484535284
+    },
+    {
+      "species_id": "18986",
+      "name": "Amazona vinacea",
+      "common_name": "",
+      "family": "Psittacidae",
+      "genus": "Amazona",
+      "count": 70,
+      "quality_mean": 50.345571428571425,
+      "quality_std": 8.42676054275295
+    },
+    {
+      "species_id": "458",
+      "name": "Aramides saracura",
+      "common_name": "",
+      "family": "Rallidae",
+      "genus": "Aramides",
+      "count": 70,
+      "quality_mean": 57.18714285714285,
+      "quality_std": 12.103708775513766
+    },
+    {
+      "species_id": "42166",
+      "name": "Axis axis",
+      "common_name": "",
+      "family": "Cervidae",
+      "genus": "Axis",
+      "count": 14,
+      "quality_mean": 61.63642857142857,
+      "quality_std": 18.459262718268054
+    },
+    {
+      "species_id": "2166",
+      "name": "Baryphthengus ruficapillus",
+      "common_name": "",
+      "family": "Momotidae",
+      "genus": "Baryphthengus",
+      "count": 70,
+      "quality_mean": 56.53,
+      "quality_std": 11.844614568896459
+    },
+    {
+      "species_id": "15902",
+      "name": "Biatas nigropectus",
+      "common_name": "",
+      "family": "Thamnophilidae",
+      "genus": "Biatas",
+      "count": 48,
+      "quality_mean": 50.31354166666667,
+      "quality_std": 11.98470457318816
+    },
+    {
+      "species_id": "19215",
+      "name": "Brotogeris chiriri",
+      "common_name": "",
+      "family": "Psittacidae",
+      "genus": "Brotogeris",
+      "count": 70,
+      "quality_mean": 57.551857142857145,
+      "quality_std": 11.027487512427058
+    },
+    {
+      "species_id": "47091",
+      "name": "Cabassous tatouay",
+      "common_name": "",
+      "family": "Chlamyphoridae",
+      "genus": "Cabassous",
+      "count": 13,
+      "quality_mean": 57.02846153846153,
+      "quality_std": 16.527649954477845
+    },
+    {
+      "species_id": "47144",
+      "name": "Canis familiaris",
+      "common_name": "",
+      "family": "Canidae",
+      "genus": "Canis",
+      "count": 51,
+      "quality_mean": 60.85058823529411,
+      "quality_std": 15.404518106235969
+    },
+    {
+      "species_id": "513600",
+      "name": "Celeus galeatus",
+      "common_name": "",
+      "family": "Picidae",
+      "genus": "Celeus",
+      "count": 42,
+      "quality_mean": 54.681190476190466,
+      "quality_std": 11.9562365081956
+    },
+    {
+      "species_id": "42087",
+      "name": "Cerdocyon thous",
+      "common_name": "",
+      "family": "Canidae",
+      "genus": "Cerdocyon",
+      "count": 70,
+      "quality_mean": 67.56228571428571,
+      "quality_std": 17.816847097334477
+    },
+    {
+      "species_id": "9021",
+      "name": "Chamaeza campanisona",
+      "common_name": "",
+      "family": "Formicariidae",
+      "genus": "Chamaeza",
+      "count": 39,
+      "quality_mean": 53.50307692307692,
+      "quality_std": 15.373498534790677
+    },
+    {
+      "species_id": "578313",
+      "name": "Conopophaga lineata",
+      "common_name": "",
+      "family": "Conopophagidae",
+      "genus": "Conopophaga",
+      "count": 70,
+      "quality_mean": 49.13728571428571,
+      "quality_std": 9.699496882597066
+    },
+    {
+      "species_id": "721832",
+      "name": "Conopophaga lineata vulgaris",
+      "common_name": "",
+      "family": "Conopophagidae",
+      "genus": "Conopophaga",
+      "count": 3,
+      "quality_mean": 43.949999999999996,
+      "quality_std": 8.672658185354706
+    },
+    {
+      "species_id": "2046",
+      "name": "Crax fasciolata",
+      "common_name": "",
+      "family": "Cracidae",
+      "genus": "Crax",
+      "count": 21,
+      "quality_mean": 62.13857142857143,
+      "quality_std": 14.594307855075126
+    },
+    {
+      "species_id": "1289548",
+      "name": "Cryptopezus nattereri",
+      "common_name": "",
+      "family": "Grallariidae",
+      "genus": "Cryptopezus",
+      "count": 6,
+      "quality_mean": 60.798333333333346,
+      "quality_std": 16.865719093935947
+    },
+    {
+      "species_id": "20599",
+      "name": "Crypturellus obsoletus",
+      "common_name": "",
+      "family": "Tinamidae",
+      "genus": "Crypturellus",
+      "count": 46,
+      "quality_mean": 52.39195652173915,
+      "quality_std": 11.019500623808216
+    },
+    {
+      "species_id": "20587",
+      "name": "Crypturellus tataupa",
+      "common_name": "",
+      "family": "Tinamidae",
+      "genus": "Crypturellus",
+      "count": 42,
+      "quality_mean": 54.87738095238095,
+      "quality_std": 13.393467501435843
+    },
+    {
+      "species_id": "74257",
+      "name": "Cuniculus paca",
+      "common_name": "",
+      "family": "Cuniculidae",
+      "genus": "Cuniculus",
+      "count": 25,
+      "quality_mean": 50.77040000000001,
+      "quality_std": 9.957713183256484
+    },
+    {
+      "species_id": "8484",
+      "name": "Cyanocorax chrysops",
+      "common_name": "",
+      "family": "Corvidae",
+      "genus": "Cyanocorax",
+      "count": 70,
+      "quality_mean": 55.368857142857145,
+      "quality_std": 11.543530475410662
+    },
+    {
+      "species_id": "558592",
+      "name": "Cyanoloxia brissonii",
+      "common_name": "",
+      "family": "Cardinalidae",
+      "genus": "Cyanoloxia",
+      "count": 70,
+      "quality_mean": 51.326857142857136,
+      "quality_std": 7.335667180263281
+    },
+    {
+      "species_id": "43721",
+      "name": "Dasyprocta azarae",
+      "common_name": "",
+      "family": "Dasyproctidae",
+      "genus": "Dasyprocta",
+      "count": 70,
+      "quality_mean": 70.99914285714287,
+      "quality_std": 11.80124627109444
+    },
+    {
+      "species_id": "47075",
+      "name": "Dasypus novemcinctus",
+      "common_name": "",
+      "family": "Dasypodidae",
+      "genus": "Dasypus",
+      "count": 70,
+      "quality_mean": 65.10785714285714,
+      "quality_std": 15.703385976357103
+    },
+    {
+      "species_id": "42658",
+      "name": "Didelphis albiventris",
+      "common_name": "",
+      "family": "Didelphidae",
+      "genus": "Didelphis",
+      "count": 70,
+      "quality_mean": 62.124571428571436,
+      "quality_std": 17.03767947694708
+    },
+    {
+      "species_id": "42657",
+      "name": "Didelphis aurita",
+      "common_name": "",
+      "family": "Didelphidae",
+      "genus": "Didelphis",
+      "count": 70,
+      "quality_mean": 58.151,
+      "quality_std": 14.478325095515316
+    },
+    {
+      "species_id": "41774",
+      "name": "Eira barbara",
+      "common_name": "",
+      "family": "Mustelidae",
+      "genus": "Eira",
+      "count": 70,
+      "quality_mean": 66.2462857142857,
+      "quality_std": 14.766531285446883
+    },
+    {
+      "species_id": "47083",
+      "name": "Euphractus sexcinctus",
+      "common_name": "",
+      "family": "Chlamyphoridae",
+      "genus": "Euphractus",
+      "count": 39,
+      "quality_mean": 62.291794871794885,
+      "quality_std": 18.424235554095432
+    },
+    {
+      "species_id": "41824",
+      "name": "Galictis cuja",
+      "common_name": "",
+      "family": "Mustelidae",
+      "genus": "Galictis",
+      "count": 70,
+      "quality_mean": 64.77671428571429,
+      "quality_std": 17.11950773002446
+    },
+    {
+      "species_id": "3503",
+      "name": "Geotrygon montana",
+      "common_name": "",
+      "family": "Columbidae",
+      "genus": "Geotrygon",
+      "count": 35,
+      "quality_mean": 53.710571428571434,
+      "quality_std": 11.605253476115802
+    },
+    {
+      "species_id": "116908",
+      "name": "Grallaria varia",
+      "common_name": "",
+      "family": "Grallariidae",
+      "genus": "Grallaria",
+      "count": 19,
+      "quality_mean": 53.68368421052631,
+      "quality_std": 11.148970785883671
+    },
+    {
+      "species_id": "17347",
+      "name": "Gubernetes yetapa",
+      "common_name": "",
+      "family": "Tyrannidae",
+      "genus": "Gubernetes",
+      "count": 70,
+      "quality_mean": 49.13585714285715,
+      "quality_std": 7.529655179518448
+    },
+    {
+      "species_id": "9935",
+      "name": "Habia rubica",
+      "common_name": "",
+      "family": "Cardinalidae",
+      "genus": "Habia",
+      "count": 70,
+      "quality_mean": 54.386,
+      "quality_std": 12.031625991527497
+    },
+    {
+      "species_id": "197781",
+      "name": "Herpailurus yagouaroundi",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Herpailurus",
+      "count": 41,
+      "quality_mean": 63.030975609756105,
+      "quality_std": 18.380167307935416
+    },
+    {
+      "species_id": "74442",
+      "name": "Hydrochoerus hydrochaeris",
+      "common_name": "",
+      "family": "Caviidae",
+      "genus": "Hydrochoerus",
+      "count": 70,
+      "quality_mean": 69.79442857142858,
+      "quality_std": 16.194880816896102
+    },
+    {
+      "species_id": "19565",
+      "name": "Hydropsalis torquata",
+      "common_name": "",
+      "family": "Caprimulgidae",
+      "genus": "Hydropsalis",
+      "count": 69,
+      "quality_mean": 50.916666666666664,
+      "quality_std": 13.823829527375269
+    },
+    {
+      "species_id": "15959",
+      "name": "Hypoedaleus guttatus",
+      "common_name": "",
+      "family": "Thamnophilidae",
+      "genus": "Hypoedaleus",
+      "count": 70,
+      "quality_mean": 51.52057142857143,
+      "quality_std": 11.909744615915427
+    },
+    {
+      "species_id": "43937",
+      "name": "Kannabateomys amblyonyx",
+      "common_name": "",
+      "family": "Echimyidae",
+      "genus": "Kannabateomys",
+      "count": 17,
+      "quality_mean": 55.222352941176474,
+      "quality_std": 15.327677975177016
+    },
+    {
+      "species_id": "544590",
+      "name": "Leopardus guttulus",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Leopardus",
+      "count": 70,
+      "quality_mean": 71.94928571428571,
+      "quality_std": 15.056983602437828
+    },
+    {
+      "species_id": "41997",
+      "name": "Leopardus pardalis",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Leopardus",
+      "count": 55,
+      "quality_mean": 59.69890909090909,
+      "quality_std": 18.165281638106677
+    },
+    {
+      "species_id": "632203",
+      "name": "Leopardus pardalis mitis",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Leopardus",
+      "count": 3,
+      "quality_mean": 70.51,
+      "quality_std": 13.9149128635432
+    },
+    {
+      "species_id": "41988",
+      "name": "Leopardus wiedii",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Leopardus",
+      "count": 47,
+      "quality_mean": 61.322978723404255,
+      "quality_std": 16.859830507577122
+    },
+    {
+      "species_id": "3302",
+      "name": "Leptotila rufaxilla",
+      "common_name": "",
+      "family": "Columbidae",
+      "genus": "Leptotila",
+      "count": 70,
+      "quality_mean": 51.23814285714286,
+      "quality_std": 10.403259556896735
+    },
+    {
+      "species_id": "3280",
+      "name": "Leptotila verreauxi",
+      "common_name": "",
+      "family": "Columbidae",
+      "genus": "Leptotila",
+      "count": 70,
+      "quality_mean": 51.0387142857143,
+      "quality_std": 11.602023705424175
+    },
+    {
+      "species_id": "43128",
+      "name": "Lepus europaeus",
+      "common_name": "",
+      "family": "Leporidae",
+      "genus": "Lepus",
+      "count": 70,
+      "quality_mean": 58.132285714285715,
+      "quality_std": 15.034868726818104
+    },
+    {
+      "species_id": "41778",
+      "name": "Lontra longicaudis",
+      "common_name": "",
+      "family": "Mustelidae",
+      "genus": "Lontra",
+      "count": 70,
+      "quality_mean": 66.22714285714285,
+      "quality_std": 14.567342158095292
+    },
+    {
+      "species_id": "423656",
+      "name": "Lycalopex gymnocerca",
+      "common_name": "",
+      "family": "Canidae",
+      "genus": "Lycalopex",
+      "count": 70,
+      "quality_mean": 62.24942857142859,
+      "quality_std": 15.355195108377051
+    },
+    {
+      "species_id": "15857",
+      "name": "Mackenziaena leachii",
+      "common_name": "",
+      "family": "Thamnophilidae",
+      "genus": "Mackenziaena",
+      "count": 38,
+      "quality_mean": 55.439736842105255,
+      "quality_std": 11.892605284674326
+    },
+    {
+      "species_id": "15856",
+      "name": "Mackenziaena severa",
+      "common_name": "",
+      "family": "Thamnophilidae",
+      "genus": "Mackenziaena",
+      "count": 57,
+      "quality_mean": 54.13105263157895,
+      "quality_std": 10.808143726921442
+    },
+    {
+      "species_id": "14235",
+      "name": "Manacus manacus",
+      "common_name": "",
+      "family": "Pipridae",
+      "genus": "Manacus",
+      "count": 70,
+      "quality_mean": 55.376714285714286,
+      "quality_std": 10.792511123317816
+    },
+    {
+      "species_id": "42178",
+      "name": "Mazama nanus",
+      "common_name": "",
+      "family": "Cervidae",
+      "genus": "Mazama",
+      "count": 33,
+      "quality_mean": 57.34151515151516,
+      "quality_std": 17.425283289069245
+    },
+    {
+      "species_id": "201224",
+      "name": "Myiothlypis leucoblephara",
+      "common_name": "",
+      "family": "Parulidae",
+      "genus": "Myiothlypis",
+      "count": 58,
+      "quality_mean": 50.35913793103448,
+      "quality_std": 10.354979692363036
+    },
+    {
+      "species_id": "47107",
+      "name": "Myrmecophaga tridactyla",
+      "common_name": "",
+      "family": "Myrmecophagidae",
+      "genus": "Myrmecophaga",
+      "count": 60,
+      "quality_mean": 62.339000000000006,
+      "quality_std": 17.709297812166355
+    },
+    {
+      "species_id": "41670",
+      "name": "Nasua nasua",
+      "common_name": "",
+      "family": "Procyonidae",
+      "genus": "Nasua",
+      "count": 70,
+      "quality_mean": 68.87028571428571,
+      "quality_std": 15.191709954673923
+    },
+    {
+      "species_id": "1591",
+      "name": "Notharchus swainsoni",
+      "common_name": "",
+      "family": "Bucconidae",
+      "genus": "Notharchus",
+      "count": 70,
+      "quality_mean": 48.33157142857143,
+      "quality_std": 12.449047081800998
+    },
+    {
+      "species_id": "20656",
+      "name": "Nothura maculosa",
+      "common_name": "",
+      "family": "Tinamidae",
+      "genus": "Nothura",
+      "count": 70,
+      "quality_mean": 56.05714285714285,
+      "quality_std": 15.980300743000262
+    },
+    {
+      "species_id": "19627",
+      "name": "Nyctidromus albicollis",
+      "common_name": "",
+      "family": "Caprimulgidae",
+      "genus": "Nyctidromus",
+      "count": 65,
+      "quality_mean": 49.70723076923077,
+      "quality_std": 13.875418719413597
+    },
+    {
+      "species_id": "1384",
+      "name": "Odontophorus capueira",
+      "common_name": "",
+      "family": "Odontophoridae",
+      "genus": "Odontophorus",
+      "count": 48,
+      "quality_mean": 55.5225,
+      "quality_std": 16.092878795189712
+    },
+    {
+      "species_id": "727161",
+      "name": "Odontophorus capueira capueira",
+      "common_name": "",
+      "family": "Odontophoridae",
+      "genus": "Odontophorus",
+      "count": 32,
+      "quality_mean": 53.685937499999994,
+      "quality_std": 10.930978587075073
+    },
+    {
+      "species_id": "41970",
+      "name": "Panthera onca",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Panthera",
+      "count": 70,
+      "quality_mean": 71.86114285714287,
+      "quality_std": 13.4942533316813
+    },
+    {
+      "species_id": "42113",
+      "name": "Pecari tajacu",
+      "common_name": "",
+      "family": "Tayassuidae",
+      "genus": "Pecari",
+      "count": 70,
+      "quality_mean": 69.16171428571427,
+      "quality_std": 14.255817055446784
+    },
+    {
+      "species_id": "2061",
+      "name": "Penelope superciliaris",
+      "common_name": "",
+      "family": "Cracidae",
+      "genus": "Penelope",
+      "count": 70,
+      "quality_mean": 60.18171428571428,
+      "quality_std": 10.029506179472726
+    },
+    {
+      "species_id": "39619",
+      "name": "Phrynops williamsi",
+      "common_name": "",
+      "family": "Chelidae",
+      "genus": "Phrynops",
+      "count": 70,
+      "quality_mean": 67.52800000000002,
+      "quality_std": 11.367582554917169
+    },
+    {
+      "species_id": "2109",
+      "name": "Pipile jacutinga",
+      "common_name": "",
+      "family": "Cracidae",
+      "genus": "Pipile",
+      "count": 70,
+      "quality_mean": 64.91242857142858,
+      "quality_std": 8.938269477079887
+    },
+    {
+      "species_id": "1440090",
+      "name": "Pogonotriccus eximius",
+      "common_name": "",
+      "family": "Tyrannidae",
+      "genus": "Pogonotriccus",
+      "count": 34,
+      "quality_mean": 50.47294117647059,
+      "quality_std": 10.881771192717547
+    },
+    {
+      "species_id": "41667",
+      "name": "Procyon cancrivorus",
+      "common_name": "",
+      "family": "Procyonidae",
+      "genus": "Procyon",
+      "count": 70,
+      "quality_mean": 69.22528571428575,
+      "quality_std": 16.829894042738236
+    },
+    {
+      "species_id": "42007",
+      "name": "Puma concolor",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Puma",
+      "count": 70,
+      "quality_mean": 78.81385714285716,
+      "quality_std": 10.824461490116745
+    },
+    {
+      "species_id": "559645",
+      "name": "Puma concolor concolor",
+      "common_name": "",
+      "family": "Felidae",
+      "genus": "Puma",
+      "count": 8,
+      "quality_mean": 62.698750000000004,
+      "quality_std": 20.172466654762378
+    },
+    {
+      "species_id": "15952",
+      "name": "Pyriglena leucoptera",
+      "common_name": "",
+      "family": "Thamnophilidae",
+      "genus": "Pyriglena",
+      "count": 61,
+      "quality_mean": 50.2444262295082,
+      "quality_std": 11.26550451084647
+    },
+    {
+      "species_id": "318758",
+      "name": "Salvator merianae",
+      "common_name": "",
+      "family": "Teiidae",
+      "genus": "Salvator",
+      "count": 70,
+      "quality_mean": 70.9342857142857,
+      "quality_std": 15.483437932322447
+    },
+    {
+      "species_id": "410834",
+      "name": "Sapajus nigritus",
+      "common_name": "",
+      "family": "Cebidae",
+      "genus": "Sapajus",
+      "count": 70,
+      "quality_mean": 70.13457142857143,
+      "quality_std": 12.618160346524855
+    },
+    {
+      "species_id": "18513",
+      "name": "Selenidera maculirostris",
+      "common_name": "",
+      "family": "Ramphastidae",
+      "genus": "Selenidera",
+      "count": 70,
+      "quality_mean": 60.86442857142859,
+      "quality_std": 11.158918871815278
+    },
+    {
+      "species_id": "201230",
+      "name": "Sporophila pileata",
+      "common_name": "",
+      "family": "Thraupidae",
+      "genus": "Sporophila",
+      "count": 61,
+      "quality_mean": 39.92442622950821,
+      "quality_std": 7.436955688767352
+    },
+    {
+      "species_id": "19964",
+      "name": "Strix hylophila",
+      "common_name": "",
+      "family": "Strigidae",
+      "genus": "Strix",
+      "count": 46,
+      "quality_mean": 49.20282608695652,
+      "quality_std": 12.108984925511965
+    },
+    {
+      "species_id": "1425273",
+      "name": "Strix virgata borelliana",
+      "common_name": "",
+      "family": "Strigidae",
+      "genus": "Strix",
+      "count": 3,
+      "quality_mean": 50.00666666666667,
+      "quality_std": 10.530445806749537
+    },
+    {
+      "species_id": "72674",
+      "name": "Strix virgata",
+      "common_name": "",
+      "family": "Strigidae",
+      "genus": "Strix",
+      "count": 29,
+      "quality_mean": 55.05758620689655,
+      "quality_std": 14.454797713293106
+    },
+    {
+      "species_id": "1596103",
+      "name": "Subulo gouazoubira",
+      "common_name": "",
+      "family": "Cervidae",
+      "genus": "Subulo",
+      "count": 70,
+      "quality_mean": 59.82114285714287,
+      "quality_std": 14.579694151490985
+    },
+    {
+      "species_id": "324492",
+      "name": "Sus scrofa domesticus",
+      "common_name": "",
+      "family": "Suidae",
+      "genus": "Sus",
+      "count": 13,
+      "quality_mean": 67.00461538461539,
+      "quality_std": 18.49464729856249
+    },
+    {
+      "species_id": "42134",
+      "name": "Sus scrofa",
+      "common_name": "",
+      "family": "Suidae",
+      "genus": "Sus",
+      "count": 67,
+      "quality_mean": 63.40402985074628,
+      "quality_std": 18.96530587794157
+    },
+    {
+      "species_id": "43107",
+      "name": "Sylvilagus brasiliensis",
+      "common_name": "",
+      "family": "Leporidae",
+      "genus": "Sylvilagus",
+      "count": 67,
+      "quality_mean": 53.21462686567163,
+      "quality_std": 15.26200778328948
+    },
+    {
+      "species_id": "10943",
+      "name": "Synallaxis ruficapilla",
+      "common_name": "",
+      "family": "Furnariidae",
+      "genus": "Synallaxis",
+      "count": 63,
+      "quality_mean": 48.58111111111111,
+      "quality_std": 8.19708719289796
+    },
+    {
+      "species_id": "10079",
+      "name": "Tachyphonus coronatus",
+      "common_name": "",
+      "family": "Thraupidae",
+      "genus": "Tachyphonus",
+      "count": 68,
+      "quality_mean": 50.70088235294118,
+      "quality_std": 10.053709256273955
+    },
+    {
+      "species_id": "47104",
+      "name": "Tamandua tetradactyla",
+      "common_name": "",
+      "family": "Myrmecophagidae",
+      "genus": "Tamandua",
+      "count": 70,
+      "quality_mean": 73.46271428571428,
+      "quality_std": 15.787131370783209
+    },
+    {
+      "species_id": "43353",
+      "name": "Tapirus terrestris",
+      "common_name": "",
+      "family": "Tapiridae",
+      "genus": "Tapirus",
+      "count": 70,
+      "quality_mean": 79.58114285714284,
+      "quality_std": 9.437870907429604
+    },
+    {
+      "species_id": "1128834",
+      "name": "Tapirus terrestris terrestris",
+      "common_name": "",
+      "family": "Tapiridae",
+      "genus": "Tapirus",
+      "count": 4,
+      "quality_mean": 55.282500000000006,
+      "quality_std": 12.410347245343301
+    },
+    {
+      "species_id": "42115",
+      "name": "Tayassu pecari",
+      "common_name": "",
+      "family": "Tayassuidae",
+      "genus": "Tayassu",
+      "count": 18,
+      "quality_mean": 66.96111111111111,
+      "quality_std": 14.979714390130292
+    },
+    {
+      "species_id": "20690",
+      "name": "Tinamus solitarius",
+      "common_name": "",
+      "family": "Tinamidae",
+      "genus": "Tinamus",
+      "count": 70,
+      "quality_mean": 56.90757142857142,
+      "quality_std": 14.816774512665829
+    },
+    {
+      "species_id": "12746",
+      "name": "Turdus albicollis",
+      "common_name": "",
+      "family": "Turdidae",
+      "genus": "Turdus",
+      "count": 70,
+      "quality_mean": 52.79671428571429,
+      "quality_std": 8.995985886006297
+    },
+    {
+      "species_id": "12738",
+      "name": "Turdus rufiventris",
+      "common_name": "",
+      "family": "Turdidae",
+      "genus": "Turdus",
+      "count": 63,
+      "quality_mean": 53.90857142857144,
+      "quality_std": 13.257582299777518
+    }
+  ],
+  "structure": "Hierarchical: Family/Genus/Species",
+  "taxonomy_breakdown": {
+    "families_list": [],
+    "genera_list": []
+  },
+  "distribution": {
+    "images_histogram": {
+      "bins": [
+        3.0,
+        9.7,
+        16.4,
+        23.1,
+        29.8,
+        36.5,
+        43.2,
+        49.9,
+        56.6,
+        63.300000000000004,
+        70.0
+      ],
+      "counts": [
+        6,
+        3,
+        4,
+        2,
+        4,
+        6,
+        5,
+        3,
+        7,
+        51
+      ]
+    },
+    "quality_histogram": {
+      "bins": [
+        30.045230249039523,
+        36.406939142293616,
+        42.76864803554771,
+        49.1303569288018,
+        55.492065822055906,
+        61.853774715309996,
+        68.21548360856409,
+        74.57719250181819,
+        80.93890139507228,
+        87.30061028832638,
+        93.66231918158047
+      ],
+      "counts": [
+        165,
+        345,
+        938,
+        1099,
+        774,
+        382,
+        262,
+        215,
+        313,
+        451
+      ]
+    }
+  }
+}
