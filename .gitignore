@@ -44,7 +44,7 @@ predictions_*.csv
 .ipynb_checkpoints/
 
 # ── IDEs ─────────────────────────────────────────────────────────────
-.vscode/settings.json
+.vscode/
 .idea/
 
 # ── Sistema operativo ────────────────────────────────────────────────
