@@ -60,6 +60,20 @@ Thumbs.db
 # ── Reporte HTML generado (se regenera al final del proyecto) ────────
 02-benchmarking/data/reports/*.html
 
+# ── Figuras del reporte (figures/ y subcarpetas umaps/, errors/, ivc/) ──
+# PNG excluidos: 130 MB totales, reproducibles ejecutando
+#   scripts/06_generate_full_report.py con el venv del proyecto.
+# SVG trackeados: vectoriales y livianos (25.7 MB), escalables para
+#   presentación y embebibles en el reporte sin pérdida de calidad.
+02-benchmarking/data/reports/figures/*.png
+02-benchmarking/data/reports/figures/umaps/*.png
+02-benchmarking/data/reports/figures/errors/*.png
+02-benchmarking/data/reports/figures/ivc/*.png
+!02-benchmarking/data/reports/figures/*.svg
+!02-benchmarking/data/reports/figures/umaps/*.svg
+!02-benchmarking/data/reports/figures/errors/*.svg
+!02-benchmarking/data/reports/figures/ivc/*.svg
+
 # ── Explícitamente trackeados (no ignorar) ───────────────────────────
 !Indice_Valor_Conservacion_Misiones.csv
 !dataset_index.csv

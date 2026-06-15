@@ -2,6 +2,7 @@
 de todos los experimentos del pipeline de benchmarking."""
 import sys
 import os
+import gc
 import logging
 import pandas as pd
 from tqdm import tqdm
@@ -153,7 +154,7 @@ def main():
         out_umap = UMAP_DIR / f"umap_{model_name}.png"
         umap_files[model_name] = out_umap
         
-        if not out_umap.exists():
+        if not out_umap.exists() or not out_umap.with_suffix('.svg').exists():
             embed_data = evaluator.load_embeddings(model_name)
             if embed_data[0] is not None:
                 # Mapa de familias
@@ -189,19 +190,22 @@ def main():
                 out_ivc = IVC_DIR / f"ivc_perf_{model_name}_{clf_slug}.png"
                 
                 # Generar solo si no existen
-                if not out_tax.exists() or not out_ivc.exists():
+                tax_svg = out_tax.with_suffix('.svg')
+                ivc_svg = out_ivc.with_suffix('.svg')
+                if not out_tax.exists() or not out_ivc.exists() or not tax_svg.exists() or not ivc_svg.exists():
                     y_p = df_pred[col_pred]
-                    
-                    if not out_tax.exists():
+
+                    if not out_tax.exists() or not tax_svg.exists():
                         err_counts = analysis.analyze_taxonomic_errors(y_true, y_p, df_index)
                         viz.plot_taxonomic_errors(err_counts, f"{model_name} + {clf_name}", out_tax)
-                    
-                    if not out_ivc.exists():
+
+                    if not out_ivc.exists() or not ivc_svg.exists():
                         df_ivc = analysis.analyze_ivc_performance(y_true, y_p, df_index)
                         if df_ivc is not None:
                             viz.plot_ivc_performance(df_ivc, f"{model_name} + {clf_name}", out_ivc)
-        
-    
+
+        gc.collect()
+
     # vi. Generar HTML
     # 4. HTML Generación
     logger.info("Maquetando HTML Interactivo...")

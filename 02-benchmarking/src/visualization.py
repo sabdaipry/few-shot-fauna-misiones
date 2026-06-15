@@ -1,6 +1,9 @@
 """Funciones de visualización para el benchmark de fauna de la Selva Paranaense."""
 import pandas as pd
 import numpy as np
+import matplotlib
+# Forzar backend headless antes de importar pyplot: evita OOM con Qt en loops largos de figuras a 600 DPI.
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import umap
@@ -24,6 +27,20 @@ plt.rcParams['figure.titlesize'] = 20
 
 # Paleta "Selva" (Verdes)
 FOREST_PALETTE = "Greens_r"
+
+
+def _save_figure(output_path, fig=None):
+    """Guarda la figura en PNG y SVG derivando la ruta SVG de output_path.
+
+    Depende de rcParams ya configurados: savefig.bbox='tight' y figure.dpi=600.
+    El formato SVG es vectorial; matplotlib ignora dpi para ese formato.
+    """
+    path = Path(output_path)
+    svg_path = path.with_suffix('.svg')
+    save_fn = fig.savefig if fig is not None else plt.savefig
+    save_fn(path)
+    save_fn(svg_path)
+    plt.close(fig) if fig is not None else plt.close()
 
 def standardize_columns(df):
     """
@@ -116,8 +133,7 @@ def plot_leaderboard(df, metric="Accuracy", output_path="leaderboard.png"):
     for i, v in enumerate(df_best[metric]):
         ax.text(v + 0.005, i, f"{v:.4f}", va='center', fontsize=11, fontweight='bold')
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_heatmap(df, metric="Accuracy", output_path="heatmap.png"):
     """Matriz: Backbone (Eje Y) vs Clasificador (Eje X)."""
@@ -141,8 +157,7 @@ def plot_heatmap(df, metric="Accuracy", output_path="heatmap.png"):
     plt.xlabel("Clasificador")
     plt.xticks(rotation=45, ha='right')
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_pareto(df_sum, df_time, metric="Accuracy", output_path="pareto.png"):
     """
@@ -202,8 +217,7 @@ def plot_pareto(df_sum, df_time, metric="Accuracy", output_path="pareto.png"):
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title="Modelo / Dimensión")
 
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
+    _save_figure(output_path)
 
 def plot_scalability_curves(df_scale, output_path):
     """Curvas de degradación (TODOS los modelos)."""
@@ -234,8 +248,7 @@ def plot_scalability_curves(df_scale, output_path):
     plt.ylim(0.0, 1.05)
     plt.grid(True, alpha=0.3)
 
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
+    _save_figure(output_path)
 
 def plot_dino_comparison(df, metric="Accuracy", output_path="dino_comp.png"):
     """Comparativa DINO: CLS vs GAP."""
@@ -257,8 +270,7 @@ def plot_dino_comparison(df, metric="Accuracy", output_path="dino_comp.png"):
     plt.ylabel(metric)
     plt.xlabel("Modelo Base")
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Index', 'Calinski-Harabasz Index'], output_path_prefix="emb_metric"):
     """Barplots para métricas de clustering."""
@@ -296,8 +308,7 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
         plt.ylabel("")
 
         safe_name = met.replace(' ', '_').lower()
-        plt.savefig(f"{output_path_prefix}_{safe_name}.png", bbox_inches='tight')
-        plt.close()
+        _save_figure(f"{output_path_prefix}_{safe_name}.png")
 
 def plot_backbone_latency(df_time, output_path="latency_backbone.png"):
     """Nueva gráfica: Latencia por Backbone."""
@@ -330,8 +341,7 @@ def plot_backbone_latency(df_time, output_path="latency_backbone.png"):
     for i, v in enumerate(df_sorted["Backbone Time (ms)"]):
         plt.text(v + 5, i, f"{v:.1f} ms", va='center', fontsize=11)
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_classifier_latency(df_sum, output_path="latency_classifier.png"):
     """Nueva gráfica: Latencia Promedio por Clasificador."""
@@ -364,8 +374,7 @@ def plot_classifier_latency(df_sum, output_path="latency_classifier.png"):
     for i, v in enumerate(df_sorted["Classifier Time (ms)"]):
         plt.text(v * 1.1, i, f"{v:.4f} ms", va='center', fontsize=11)
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_umap(X, y, model_name, output_path, family_map=None):
     """UMAP por Familia."""
@@ -397,8 +406,7 @@ def plot_umap(X, y, model_name, output_path, family_map=None):
     plt.xticks([])
     plt.yticks([])
 
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
+    _save_figure(output_path)
 
 
 def plot_taxonomic_errors(error_counts, model_name, output_path):
@@ -434,8 +442,7 @@ def plot_taxonomic_errors(error_counts, model_name, output_path):
             plt.text(bar.get_x() + bar.get_width()/2., height + 1,
                      f'{height:.1f}%', ha='center', va='bottom', fontweight='bold')
 
-    plt.savefig(output_path)
-    plt.close()
+    _save_figure(output_path)
 
 def plot_ivc_performance(df_ivc, model_name, output_path):
     """
@@ -486,5 +493,4 @@ def plot_ivc_performance(df_ivc, model_name, output_path):
     for container in ax.containers:
         ax.bar_label(container, fmt='%.0f%%', fontsize=11, padding=3)
 
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
+    _save_figure(output_path)
