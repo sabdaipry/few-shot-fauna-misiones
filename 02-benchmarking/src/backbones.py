@@ -178,6 +178,8 @@ class HFViTExtractor(BaseModel):
                 patch_tokens = last_hidden_states[0, 1:, :]
                 avg_pool = torch.mean(patch_tokens, dim=0)
                 return avg_pool.cpu().numpy().flatten()
+            else:
+                raise ValueError(f"Valor de pooling no soportado: {self.pooling!r}")
         except Exception as e:
             logger.error(f"Error en {self.name} con {image_path}: {e}")
             return None
