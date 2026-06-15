@@ -6,24 +6,14 @@ y las constantes de paths derivadas, para que todos los scripts de
 02-benchmarking/scripts/ las importen en lugar de duplicarlas.
 """
 from pathlib import Path
+from src.backbones import MODEL_REGISTRY
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
-# Modelos
+# Modelos — el orden está definido en MODEL_REGISTRY (src/backbones.py)
 # ---------------------------------------------------------------------------
-MODELS_TO_TEST = [
-    "resnet50",
-    "convnextv2_tiny", "convnextv2_base",
-    "dinov2_small", "dinov2_base",
-    "dinov2_small_gap", "dinov2_base_gap",
-    "dinov3_small", "dinov3_base",
-    "dinov3_small_gap", "dinov3_base_gap",
-    "siglip_base", "siglip_so400m",
-    "siglip2_base", "siglip2_so400m",
-    "bioclip_v1", "bioclip_v2",
-    "clip_base", "clip_large",
-]
+MODELS_TO_TEST = list(MODEL_REGISTRY.keys())
 
 # ---------------------------------------------------------------------------
 # Paths

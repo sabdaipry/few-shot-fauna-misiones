@@ -16,16 +16,8 @@ sys.path.append(str(project_root))
 
 try:
     from src.utils.logger import setup_logger
-    from src.backbones import (
-        ResNet50Extractor, 
-        DinoV2Extractor,
-        DinoV3Extractor,
-        BioClipExtractor,
-        ConvNextV2Extractor,
-        SigLIPExtractor,
-        SigLIP2Extractor,
-        CLIPExtractor
-    )
+    from src.backbones import create_extractor
+    from src.config import MODELS_TO_TEST
 except ImportError as e:
     print(f"Error importando módulos: {e}")
     sys.exit(1)
@@ -35,29 +27,6 @@ DATASET_INDEX = project_root / "data/dataset_index.csv"
 FEATURES_DIR = project_root / "data/features"
 
 logger = setup_logger("feature_extractor", log_dir=project_root / "logs")
-
-def get_model(model_name, device):
-    """Fábrica de modelos"""
-    if model_name == "resnet50": return ResNet50Extractor(device=device)
-    elif model_name == "dinov2_small": return DinoV2Extractor(version='small', pooling='cls', device=device)
-    elif model_name == "dinov2_small_gap": return DinoV2Extractor(version='small', pooling='gap', device=device)
-    elif model_name == "dinov2_base": return DinoV2Extractor(version='base', pooling='cls', device=device)
-    elif model_name == "dinov2_base_gap": return DinoV2Extractor(version='base', pooling='gap', device=device)
-    elif model_name == "dinov3_small": return DinoV3Extractor(version='small', pooling='cls', device=device)
-    elif model_name == "dinov3_small_gap": return DinoV3Extractor(version='small', pooling='gap', device=device)
-    elif model_name == "dinov3_base": return DinoV3Extractor(version='base', pooling='cls', device=device)
-    elif model_name == "dinov3_base_gap": return DinoV3Extractor(version='base', pooling='gap', device=device)
-    elif model_name == "bioclip_v1": return BioClipExtractor(version='v1', device=device)
-    elif model_name == "bioclip_v2": return BioClipExtractor(version='v2', device=device)
-    elif model_name == "convnextv2_tiny": return ConvNextV2Extractor(version='tiny', device=device)
-    elif model_name == "convnextv2_base": return ConvNextV2Extractor(version='base', device=device)
-    elif model_name == "siglip_so400m": return SigLIPExtractor(version='so400m', device=device)
-    elif model_name == "siglip_base": return SigLIPExtractor(version='base', device=device)
-    elif model_name == "siglip2_base": return SigLIP2Extractor(version='base', device=device)
-    elif model_name == "siglip2_so400m": return SigLIP2Extractor(version='so400m', device=device)
-    elif model_name == "clip_base": return CLIPExtractor(version='base', device=device)
-    elif model_name == "clip_large": return CLIPExtractor(version='large', device=device)
-    else: raise ValueError(f"Modelo no reconocido: {model_name}")
 
 def extract_features(model_name):
     """Extrae y guarda embeddings de todas las imágenes del índice para el modelo dado."""
@@ -74,7 +43,7 @@ def extract_features(model_name):
     logger.info(f"-> Iniciando extracción con {model_name} en {device}...")
     
     try:
-        extractor = get_model(model_name, device)
+        extractor = create_extractor(model_name, device)
     except Exception as e:
         logger.error(f"Error cargando modelo: {e}")
         return
@@ -159,18 +128,7 @@ def extract_features(model_name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extractor de Características")
     parser.add_argument("--model", type=str, required=True,
-                        choices=[
-                            "resnet50",
-                            "dinov2_small", "dinov2_base", 
-                            "dinov2_small_gap", "dinov2_base_gap",
-                            "dinov3_small", "dinov3_base", 
-                            "dinov3_small_gap", "dinov3_base_gap",
-                            "bioclip_v1", "bioclip_v2",
-                            "convnextv2_tiny", "convnextv2_base", 
-                            "siglip_so400m", "siglip_base",
-                            "siglip2_base", "siglip2_so400m",
-                            "clip_base", "clip_large"
-                        ],
+                        choices=MODELS_TO_TEST,
                         help="Modelo a utilizar")
     
     args = parser.parse_args()

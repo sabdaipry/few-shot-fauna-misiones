@@ -28,46 +28,13 @@ sys.path.append(str(project_root))
 
 from src.utils.logger import setup_logger
 from src.config import MODELS_TO_TEST, DATASET_INDEX_PATH, BACKBONES_TIMES_PATH
-from src.backbones import (
-    ResNet50Extractor,
-    DinoV2Extractor,
-    DinoV3Extractor,
-    BioClipExtractor,
-    ConvNextV2Extractor,
-    SigLIPExtractor,
-    SigLIP2Extractor,
-    CLIPExtractor
-)
+from src.backbones import create_extractor
 
 logger = setup_logger("profile-backbones")
 # Obtenemos el logger de 'backbones' (el archivo src/backbones.py)
 # y le subimos el nivel a ERROR. Así evitamos que imprima "-> Cargando modelo..." en cada iteración.
 logging.getLogger("backbones").setLevel(logging.ERROR)
 
-# --- FÁBRICA DE MODELOS ---
-def get_model_instance(model_name, device):
-    """Instancia el modelo según el nombre."""
-    if model_name == "resnet50": return ResNet50Extractor(device=device)
-    elif model_name == "dinov2_small": return DinoV2Extractor(version='small', pooling='cls', device=device)
-    elif model_name == "dinov2_base": return DinoV2Extractor(version='base', pooling='cls', device=device)
-    elif model_name == "dinov2_small_gap": return DinoV2Extractor(version='small', pooling='gap', device=device)
-    elif model_name == "dinov2_base_gap": return DinoV2Extractor(version='base', pooling='gap', device=device)
-    elif model_name == "dinov3_small": return DinoV3Extractor(version='small', pooling='cls', device=device)
-    elif model_name == "dinov3_base": return DinoV3Extractor(version='base', pooling='cls', device=device)
-    elif model_name == "dinov3_small_gap": return DinoV3Extractor(version='small', pooling='gap', device=device)
-    elif model_name == "dinov3_base_gap": return DinoV3Extractor(version='base', pooling='gap', device=device)
-    elif model_name == "bioclip_v1": return BioClipExtractor(version='v1', device=device)
-    elif model_name == "bioclip_v2": return BioClipExtractor(version='v2', device=device)
-    elif model_name == "convnextv2_tiny": return ConvNextV2Extractor(version='tiny', device=device)
-    elif model_name == "convnextv2_base": return ConvNextV2Extractor(version='base', device=device)
-    elif model_name == "siglip_so400m": return SigLIPExtractor(version='so400m', device=device)
-    elif model_name == "siglip_base": return SigLIPExtractor(version='base', device=device)
-    elif model_name == "siglip2_base": return SigLIP2Extractor(version='base', device=device)
-    elif model_name == "siglip2_so400m": return SigLIP2Extractor(version='so400m', device=device)
-    elif model_name == "clip_base": return CLIPExtractor(version='base', device=device)
-    elif model_name == "clip_large": return CLIPExtractor(version='large', device=device)
-    else: raise ValueError(f"Modelo desconocido: {model_name}")
-    
 def prepare_input_and_forward(extractor, image_path, device):
     """
     Prepara la entrada y devuelve la función lambda para ejecutar el forward.
@@ -123,7 +90,7 @@ def profile_model_latency(model_name, image_path, device, num_iters=50, warmup=1
 
     try:
         # 1. Cargar Extractor
-        extractor = get_model_instance(model_name, device)
+        extractor = create_extractor(model_name, device.type)
 
         try:
             extractor.load_model() # Asegurar que los pesos estén cargados

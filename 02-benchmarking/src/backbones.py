@@ -563,3 +563,41 @@ class CLIPExtractor(BaseModel):
         except Exception as e:
             logger.error(f"Error en {self.name} con {image_path}: {e}")
             return None
+
+
+# ---------------------------------------------------------------------------
+# Registry y factory centralizada
+# ---------------------------------------------------------------------------
+
+MODEL_REGISTRY: dict[str, tuple[type, dict]] = {
+    "resnet50":         (ResNet50Extractor,   {}),
+    "convnextv2_tiny":  (ConvNextV2Extractor, {"version": "tiny"}),
+    "convnextv2_base":  (ConvNextV2Extractor, {"version": "base"}),
+    "dinov2_small":     (DinoV2Extractor,     {"version": "small", "pooling": "cls"}),
+    "dinov2_base":      (DinoV2Extractor,     {"version": "base",  "pooling": "cls"}),
+    "dinov2_small_gap": (DinoV2Extractor,     {"version": "small", "pooling": "gap"}),
+    "dinov2_base_gap":  (DinoV2Extractor,     {"version": "base",  "pooling": "gap"}),
+    "dinov3_small":     (DinoV3Extractor,     {"version": "small", "pooling": "cls"}),
+    "dinov3_base":      (DinoV3Extractor,     {"version": "base",  "pooling": "cls"}),
+    "dinov3_small_gap": (DinoV3Extractor,     {"version": "small", "pooling": "gap"}),
+    "dinov3_base_gap":  (DinoV3Extractor,     {"version": "base",  "pooling": "gap"}),
+    "siglip_base":      (SigLIPExtractor,     {"version": "base"}),
+    "siglip_so400m":    (SigLIPExtractor,     {"version": "so400m"}),
+    "siglip2_base":     (SigLIP2Extractor,    {"version": "base"}),
+    "siglip2_so400m":   (SigLIP2Extractor,    {"version": "so400m"}),
+    "bioclip_v1":       (BioClipExtractor,    {"version": "v1"}),
+    "bioclip_v2":       (BioClipExtractor,    {"version": "v2"}),
+    "clip_base":        (CLIPExtractor,       {"version": "base"}),
+    "clip_large":       (CLIPExtractor,       {"version": "large"}),
+}
+
+
+def create_extractor(model_name: str, device: str = "cpu") -> BaseModel:
+    """Instancia un extractor por nombre, normalizando device a str."""
+    if model_name not in MODEL_REGISTRY:
+        available = ", ".join(MODEL_REGISTRY)
+        raise ValueError(
+            f"Modelo no reconocido: {model_name!r}. Disponibles: {available}"
+        )
+    cls, kwargs = MODEL_REGISTRY[model_name]
+    return cls(device=device, **kwargs)
