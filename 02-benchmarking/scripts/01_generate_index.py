@@ -1,3 +1,5 @@
+"""Genera el índice del dataset (dataset_index.csv) escaneando las imágenes,
+integrando puntajes IVC y asignando splits galería/query por especie."""
 import sys
 import os
 import pandas as pd
@@ -27,14 +29,14 @@ OUTPUT_CSV = project_root / "data/dataset_index.csv"
 IVC_CSV_PATH = project_root / "data/Indice_Valor_Conservacion_Misiones.csv"
 SEED = 29  # Semilla para que el random sea siempre igual
 
-logger = setup_logger("index_generator", log_dir=Path("logs"))
+logger = setup_logger("index_generator", log_dir=project_root / "logs")
 
 MANUAL_FIXES = {
     # --- SUBESPECIES -> MAPEAR A ESPECIE PRINCIPAL DEL CSV ---
     "tapirus terrestris terrestris": "tapirus terrestris",
     "leopardus pardalis mitis": "leopardus pardalis",
     "conopophaga lineata vulgaris": "conopophaga lineata",
-    "alouatta guariba": "alouatta guariba clamitans", # Asumiendo que es la subespecie local
+    "alouatta guariba": "alouatta guariba clamitans",  # Asumiendo que es la subespecie local
     "odontophorus capueira capueira": "odontophorus capueira",
     "puma concolor concolor": "puma concolor",
 
@@ -102,6 +104,7 @@ def calculate_ivc_category(score):
         return "Crítico"
 
 def generate_index():
+    """Escanea el directorio de imágenes, integra IVC y escribe dataset_index.csv con splits."""
     # 1. Cargar Metadatos
     ivc_lookup = load_ivc_metadata(IVC_CSV_PATH)
     
@@ -168,8 +171,6 @@ def generate_index():
                     
                     # --- LÓGICA DE MATCHING CON MANUAL FIXES ---
                     ivc_data = {'ivc_score': 0}
-                    final_category = None
-
                     final_species_name = species_folder.replace("_", " ") # Default display name
 
                     # A) Revisar correcciones manuales primero

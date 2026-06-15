@@ -1,3 +1,5 @@
+"""Extrae embeddings de imágenes usando los backbones configurados y los
+guarda como archivos .npy replicando la estructura de directorios del dataset."""
 import sys
 import argparse
 import numpy as np
@@ -58,6 +60,7 @@ def get_model(model_name, device):
     else: raise ValueError(f"Modelo no reconocido: {model_name}")
 
 def extract_features(model_name):
+    """Extrae y guarda embeddings de todas las imágenes del índice para el modelo dado."""
     # 1. Cargar índice
     if not DATASET_INDEX.exists():
         logger.error("No se encontró dataset_index.csv. Corre el script 01 primero.")

@@ -1,3 +1,4 @@
+"""Inspección rápida de especies en dataset_index.csv que quedaron sin IVC asignado."""
 import pandas as pd
 
 # Cargar el índice que acabamos de generar

@@ -1,3 +1,5 @@
+"""Tests de sistema: actualización incremental (agregar nuevas especies sin reentrenar)
+y detección de outliers (Open Set Recognition) para los modelos top del benchmark."""
 import sys
 import os
 import time
@@ -8,8 +10,6 @@ from sklearn.neighbors import NearestCentroid
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from sklearn.preprocessing import Normalizer
 import warnings
-
-import logging
 from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
@@ -173,7 +173,7 @@ def test_outlier_detection(X_train, y_train, X_test, y_test, model_name):
     clf.fit(X_tr_known, y_tr_known)
     
     # Calcular Umbral (Percentil 95 de distancias en Train)
-    # Vectorizado para velocidad
+    # Distancias de cada muestra de train a su centroide de clase correspondiente
     train_dists = []
     for i, x in enumerate(X_tr_known):
         centroid = clf.centroids_[np.where(clf.classes_ == y_tr_known[i])[0][0]]
@@ -210,7 +210,7 @@ def test_outlier_detection(X_train, y_train, X_test, y_test, model_name):
     }
 
 def main():
-
+    """Ejecuta los tests de actualización incremental y detección de outliers."""
     logger.info("==============================================")
     logger.info("   FASE 5b: TESTS DE SISTEMA (Incr. + Outliers)")
     logger.info("   (Selección: Top 5 F1 Score y Top 5 Velocidad)")
@@ -242,7 +242,7 @@ def main():
         pbar.set_description(f"Test Sistema: {model_name}")
         
         t_bb = backbone_times.get(model_name, 0.0)
-         # Cargar embeddings
+        # Cargar embeddings
         data = evaluator.load_embeddings(model_name)
         if data[0] is None: continue
         

@@ -1,3 +1,5 @@
+"""Prueba la escalabilidad del clasificador NearestCentroid midiendo métricas
+y latencia a medida que aumenta el número de especies (clases) del dataset."""
 import sys
 import os
 import time
@@ -7,7 +9,6 @@ from tqdm import tqdm
 from sklearn.neighbors import NearestCentroid
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import Normalizer
-import logging
 from pathlib import Path
 
 # --- CONFIGURACIÓN DE RUTAS ---
@@ -28,6 +29,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 def main():
+    """Evalúa degradación de métricas y latencia al escalar el número de especies."""
     logger.info("==============================================")
     logger.info("   FASE 5: PRUEBA DE ESCALABILIDAD")
     logger.info("   (Curvas de Degradación)")
@@ -99,8 +101,8 @@ def main():
             clf_warm = NearestCentroid(metric='euclidean')
             clf_warm.fit(X_train_full[:50], y_train_full[:50])
             clf_warm.predict(X_test_full[:10])
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Warm-up del clasificador falló (ignorado): {e}")
 
         # Loop por escalones
         for n_classes in STEPS:
@@ -198,7 +200,7 @@ def main():
         # Preview rápido
         logger.info("Vista previa de resultados (todas las clases):")
         final_step = df_results[df_results['Num Classes'] == df_results['Num Classes'].max()]
-        print(final_step[['Embedding Model', 'Accuracy', 'F1 Score Macro']].sort_values('F1 Score Macro', ascending=False).to_string(index=False))
+        logger.info(final_step[['Embedding Model', 'Accuracy', 'F1 Score Macro']].sort_values('F1 Score Macro', ascending=False).to_string(index=False))
     else:
         logger.error("No se obtuvieron resultados de la prueba de escalabilidad.")
 

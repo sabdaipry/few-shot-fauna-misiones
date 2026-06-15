@@ -1,5 +1,8 @@
+"""Genera el reporte HTML interactivo final consolidando métricas, gráficos y UMAPs
+de todos los experimentos del pipeline de benchmarking."""
 import sys
 import os
+import logging
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
@@ -32,6 +35,7 @@ def clean_filename(name):
     return slug
 
 def main():
+    """Orquesta la generación de todos los gráficos y del reporte HTML interactivo final."""
     logger.info("==============================================")
     logger.info("   FASE 6: GENERACIÓN DE REPORTE FINAL")
     logger.info("==============================================")
@@ -85,13 +89,6 @@ def main():
                 stats['total_species'] = df_index[col].nunique()
 
 
-        family_map = None
-        # Mapeo 'species' -> 'family' (según tu dataset_index.csv: columnas 'species' y 'family')
-        if 'family' in df_index.columns and 'species' in df_index.columns:
-             family_map = dict(zip(df_index['species'], df_index['family']))
-             logger.info(f"Mapa de familias cargado: {len(family_map)} especies.")
-        else:
-             logger.warning("No se encontraron columnas 'species'/'family' en dataset_index.csv")
     except Exception as e:
         logger.error(f"Error cargando CSVs: {e}")
         return
@@ -147,7 +144,6 @@ def main():
     umap_files = {}
     
     evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
-    import logging
     logging.getLogger("backbones").setLevel(logging.ERROR)
     
     pbar = tqdm(valid_backbones, desc="Procesando")

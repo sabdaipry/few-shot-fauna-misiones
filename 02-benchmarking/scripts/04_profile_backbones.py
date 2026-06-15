@@ -1,3 +1,5 @@
+"""Perfila la latencia de inferencia de cada backbone midiendo el tiempo
+de forward pass puro (sin carga de modelo) sobre una imagen de muestra."""
 import sys
 import os
 import time
@@ -96,7 +98,7 @@ def prepare_input_and_forward(extractor, image_path, device):
         tf = getattr(extractor, 'processor', getattr(extractor, 'preprocess', None))
         
         if tf is None:
-             raise ValueError(f"No se encontró transformación para {name}")
+            raise ValueError(f"No se encontró transformación para {name}")
 
         img_t = tf(img).unsqueeze(0).to(device)
         return lambda: extractor.model.encode_image(img_t)
@@ -114,7 +116,9 @@ def prepare_input_and_forward(extractor, image_path, device):
     raise ValueError(f"No se pudo configurar inferencia para {name}")
     
 def profile_model_latency(model_name, image_path, device, num_iters=50, warmup=10):
-    # Desactivar logs temporalmente para la carga interna
+    """Mide latencia media y desvío (ms) del forward pass de un backbone sobre una imagen."""
+    # Silencia todos los loggers raíz durante la carga del modelo para evitar
+    # el ruido de transformers/timm ("Some weights were not...", etc.)
     logging.getLogger().setLevel(logging.ERROR)
 
     try:
@@ -161,7 +165,7 @@ def profile_model_latency(model_name, image_path, device, num_iters=50, warmup=1
         return None, None
     
 def main():
-
+    """Perfila todos los modelos de MODELS_TO_TEST y guarda los tiempos en CSV."""
     # --- ARGUMENT PARSER ---
     parser = argparse.ArgumentParser(description="Profiling de Latencia de Backbones")
     parser.add_argument("--iters", type=int, default=50, help="Cantidad de iteraciones para promediar")
@@ -169,7 +173,7 @@ def main():
     args = parser.parse_args()
 
 
-    print("\n")
+    logger.info("")
     logger.info("==============================================")
     logger.info("   FASE 4: PROFILING DE BACKBONES")
     logger.info("==============================================")

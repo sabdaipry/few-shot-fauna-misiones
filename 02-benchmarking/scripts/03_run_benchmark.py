@@ -1,8 +1,8 @@
+"""Corre el benchmark de clasificación few-shot sobre todos los modelos
+configurados y guarda los resultados en benchmark_summary.csv."""
 import sys
-import os
 from pathlib import Path
 from tqdm import tqdm
-import pandas as pd
 
 current_script_path = Path(__file__).resolve()
 project_root = current_script_path.parent.parent
@@ -15,7 +15,8 @@ from src.config import MODELS_TO_TEST, DATASET_INDEX_PATH, FEATURES_DIR, BENCHMA
 logger = setup_logger("benchmarking-runner")
 
 def main():
-    print("\n")
+    """Evalúa todos los modelos configurados y guarda los resultados del benchmark."""
+    logger.info("")
     logger.info("==============================================")
     logger.info("   FASE 3: BENCHMARKING DE CLASIFICADORES")
     logger.info("==============================================")
