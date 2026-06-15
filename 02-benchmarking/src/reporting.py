@@ -1,22 +1,7 @@
+"""Generación del reporte HTML para el benchmark de fauna de la Selva Paranaense."""
 import pandas as pd
 from pathlib import Path
-
-def standardize_columns(df):
-    """Replica la estandarización para el reporte."""
-    rename_map = {
-        "F1-Macro": "F1_Macro", "F1 Score Macro": "F1_Macro", "F1 Score (Macro)": "F1_Macro",
-        "Embedding Dim": "Dim", "Embedding Dimension": "Dim"
-    }
-    return df.rename(columns=rename_map)
-
-def filter_display_data(df):
-    """Filtra FAISS y GAP para las tablas de resumen."""
-    df = df.copy()
-    if 'Classifier' in df.columns:
-        df = df[~df['Classifier'].str.contains('FAISS', case=False, na=False)]
-    if 'Embedding Model' in df.columns:
-        df = df[~df['Embedding Model'].str.contains('_gap', case=False, na=False)]
-    return df
+from .visualization import standardize_columns, filter_data
 
 def get_custom_sort_key(item):
     """
@@ -40,7 +25,7 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
     
     # Preparar Datos
     df_raw = standardize_columns(data['summary'])
-    df_clean = filter_display_data(df_raw) # SIN FAISS, SIN GAP
+    df_clean = filter_data(df_raw)
     # Ordenar por Accuracy (para el Top 10)
     df_top = df_clean.sort_values("Accuracy", ascending=False).head(10)
     
@@ -375,8 +360,7 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
 
         <h3 class="section-title">Galería UMAP</h3>
         {umap_gallery_html}
-        <div class="row">
-        
+
         <h3 class="section-title">Resultados Completos</h3>
         <div class="card"><div class="card-body">
             <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">

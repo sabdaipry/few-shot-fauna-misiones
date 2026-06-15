@@ -1,10 +1,13 @@
-import os
+"""Funciones de visualización para el benchmark de fauna de la Selva Paranaense."""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import umap
 from pathlib import Path
+from src.utils.logger import setup_logger
+
+logger = setup_logger("visualization")
 
 # Configuración de Estilo Global
 sns.set_theme(style="whitegrid")
@@ -14,8 +17,7 @@ plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans']
 
 # Paleta "Selva" (Verdes)
-FOREST_PALETTE = "Greens_r" # De oscuro a claro
-SINGLE_COLOR = "#59802a"    # Un verde vibrante para barras simples
+FOREST_PALETTE = "Greens_r"
 
 def standardize_columns(df):
     """
@@ -116,7 +118,8 @@ def plot_heatmap(df, metric="Accuracy", output_path="heatmap.png"):
     df = standardize_columns(df)
     df = filter_data(df)
 
-    if metric not in df.columns: return
+    if metric not in df.columns:
+        return
     pivot_df = df.pivot(index="Embedding Model", columns="Classifier", values=metric)
     
     # Ordenar por promedio para que los mejores queden arriba
@@ -232,7 +235,8 @@ def plot_dino_comparison(df, metric="Accuracy", output_path="dino_comp.png"):
     df = standardize_columns(df)
     
     dinos = df[df['Embedding Model'].str.contains('dino')].copy()
-    if dinos.empty: return
+    if dinos.empty:
+        return
     dinos = dinos.loc[dinos.groupby("Embedding Model")[metric].idxmax()]
 
     dinos['Arquitectura'] = dinos['Embedding Model'].str.replace('_gap', '').str.replace('_cls', '')
@@ -255,7 +259,6 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
     df = filter_data(df)
 
     df_unique = df.drop_duplicates(subset=["Embedding Model"]).copy()
-    # palette = get_model_palette(df_unique["Embedding Model"])
 
     for met in metrics:
         if met not in df.columns: continue
@@ -375,7 +378,8 @@ def plot_umap(X, y, model_name, output_path, family_map=None):
                 
             sns.scatterplot(x=embedding[:, 0], y=embedding[:, 1], hue=families, palette="tab20", s=15, alpha=0.7)
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title="Familia", ncol=2, fontsize='small')
-        except:
+        except Exception as e:
+            logger.warning("UMAP family coloring failed (%s), falling back to scatter.", e)
             plt.scatter(embedding[:, 0], embedding[:, 1], c=pd.factorize(y)[0], cmap='Spectral', s=10, alpha=0.6)
     else:
         plt.scatter(embedding[:, 0], embedding[:, 1], c=pd.factorize(y)[0], cmap='Spectral', s=10, alpha=0.6)
