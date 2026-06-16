@@ -46,6 +46,7 @@ DATASET_INDEX_PATH = _PROJECT_ROOT / "data" / "dataset_index.csv"
 FEATURES_DIR = _PROJECT_ROOT / "data" / "features"
 BENCHMARK_RESULTS_DIR = _PROJECT_ROOT / "data" / "benchmark_results"
 FIGURES_DIR = _PROJECT_ROOT / "data" / "reports" / "figures"
+FIGURES_DIR_DIST = _PROJECT_ROOT / "data" / "reports" / "figures" / "distance_distributions"
 
 BACKBONES: dict[str, int] = {
     "bioclip_v2":      768,
@@ -71,6 +72,13 @@ _METRIC_COLORS = {
     "euclidean":        _GREENS(0.7),
     "euclidean_l2norm": _GREENS(0.55),
     "manhattan":        _GREENS(0.4),
+}
+_BACKBONE_COLORS = {
+    "bioclip_v2":      _GREENS(0.9),
+    "dinov3_small":    _GREENS(0.75),
+    "dinov2_small":    _GREENS(0.6),
+    "resnet50":        _GREENS(0.45),
+    "convnextv2_tiny": _GREENS(0.3),
 }
 
 
@@ -276,14 +284,15 @@ def plot_accuracy_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
     backbones = results_df["backbone"].unique()
     metrics = METRICS
     x = np.arange(len(metrics))
-    width = 0.35
+    width = 0.15
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(14, 6))
     for i, backbone in enumerate(backbones):
         sub = results_df[results_df["backbone"] == backbone].set_index("metric")
         vals = [sub.loc[m, "accuracy"] if m in sub.index else 0.0 for m in metrics]
         offset = (i - (len(backbones) - 1) / 2) * width
-        bars = ax.bar(x + offset, vals, width, label=backbone)
+        bars = ax.bar(x + offset, vals, width, label=backbone,
+                      color=_BACKBONE_COLORS.get(backbone))
         for bar, v in zip(bars, vals):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
@@ -291,15 +300,18 @@ def plot_accuracy_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
                 f"{v:.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=7,
+                fontsize=12,
+                fontweight="bold",
+                rotation=90,
             )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, rotation=15, ha="right")
-    ax.set_ylabel("Accuracy (1-NN)")
-    ax.set_title("Accuracy 1-NN por backbone y métrica de distancia")
+    ax.set_xticklabels(metrics, rotation=15, ha="right", fontsize=12)
+    ax.set_ylabel("Accuracy (1-NN)", fontsize=12)
+    ax.set_title("Accuracy 1-NN por backbone y métrica de distancia", fontsize=12)
     ax.set_ylim(0, 1.05)
-    ax.legend()
+    ax.tick_params(axis="y", labelsize=12)
+    ax.legend(fontsize=12)
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
 
@@ -314,14 +326,15 @@ def plot_latency_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
     backbones = results_df["backbone"].unique()
     metrics = METRICS
     x = np.arange(len(metrics))
-    width = 0.35
+    width = 0.15
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(14, 6))
     for i, backbone in enumerate(backbones):
         sub = results_df[results_df["backbone"] == backbone].set_index("metric")
         vals = [sub.loc[m, "latency_ms"] if m in sub.index else np.nan for m in metrics]
         offset = (i - (len(backbones) - 1) / 2) * width
-        bars = ax.bar(x + offset, vals, width, label=backbone)
+        bars = ax.bar(x + offset, vals, width, label=backbone,
+                      color=_BACKBONE_COLORS.get(backbone))
         for bar, v in zip(bars, vals):
             if not np.isnan(v):
                 ax.text(
@@ -330,15 +343,18 @@ def plot_latency_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
                     f"{v:.2f}",
                     ha="center",
                     va="bottom",
-                    fontsize=7,
+                    fontsize=12,
+                    fontweight="bold",
+                    rotation=90,
                 )
 
     ax.set_yscale("log")
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, rotation=15, ha="right")
-    ax.set_ylabel("Latencia media por imagen (ms, escala log)")
-    ax.set_title("Latencia de búsqueda 1-NN por backbone y métrica")
-    ax.legend()
+    ax.set_xticklabels(metrics, rotation=15, ha="right", fontsize=12)
+    ax.set_ylabel("Latencia media por imagen (ms, escala log)", fontsize=12)
+    ax.set_title("Latencia de búsqueda 1-NN por backbone y métrica", fontsize=12)
+    ax.tick_params(axis="y", labelsize=12)
+    ax.legend(fontsize=12)
     ax.grid(axis="y", alpha=0.3, which="both")
     fig.tight_layout()
 
@@ -425,6 +441,7 @@ def main() -> None:
 
     BENCHMARK_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR_DIST.mkdir(parents=True, exist_ok=True)
 
     index_df = pd.read_csv(DATASET_INDEX_PATH)
     logger.info(
@@ -509,7 +526,7 @@ def main() -> None:
     # Figuras
     plot_accuracy_bar(results_df, FIGURES_DIR)
     plot_latency_bar(results_df, FIGURES_DIR)
-    plot_distance_distributions(all_distributions, results_df, FIGURES_DIR)
+    plot_distance_distributions(all_distributions, results_df, FIGURES_DIR_DIST)
 
     # Resumen en consola
     logger.info("")
