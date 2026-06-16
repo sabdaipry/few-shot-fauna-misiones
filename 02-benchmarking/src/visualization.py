@@ -411,23 +411,30 @@ def plot_umap(X, y, model_name, output_path, family_map=None):
 
 def plot_taxonomic_errors(error_counts, model_name, output_path):
     """
-    Gráfico de barras apiladas: Correcto vs Tipos de Error.
-    error_counts: dict {'Correct': int, 'Mild': int, 'Medium': int, 'Severe': int}
+    Gráfico de barras: Correcto vs Tipos de Error (5 niveles).
+    error_counts: dict {'Correct', 'Mild', 'Medium', 'Severe', 'Critical'}
     """
-    labels = ['Correcto', 'Error Leve\n(Mismo Género)', 'Error Medio\n(Misma Familia)', 'Error Severo\n(Familia Distinta)']
+    labels = [
+        'Correcto',
+        'Error Leve\n(Mismo Género)',
+        'Error Medio\n(Misma Familia)',
+        'Error Severo\n(Misma Clase,\nFamilia Distinta)',
+        'Error Crítico\n(Clase Distinta)',
+    ]
     values = [
         error_counts.get('Correct', 0),
         error_counts.get('Mild', 0),
         error_counts.get('Medium', 0),
-        error_counts.get('Severe', 0)
+        error_counts.get('Severe', 0),
+        error_counts.get('Critical', 0),
     ]
     total = sum(values)
     percentages = [v/total*100 for v in values]
 
-    # Colores semánticos: Verde -> Amarillo -> Naranja -> Rojo
-    colors = ['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c']
+    # Colores semánticos: Verde -> Amarillo -> Naranja -> Rojo -> Púrpura
+    colors = ['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c', '#8e44ad']
 
-    plt.figure(figsize=(12, 7))
+    plt.figure(figsize=(14, 7))
     bars = plt.bar(labels, percentages, color=colors, edgecolor='black', alpha=0.8)
 
     plt.title(f"Desglose Taxonómico de Errores: {model_name}", fontweight='bold', color='#1b4f25')

@@ -8,6 +8,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 import json
+import yaml
 
 # Ajuste de rutas para imports relativos
 current_script_path = Path(__file__).resolve()
@@ -61,6 +62,16 @@ def main():
         data['scalability'] = pd.read_csv(SCALABILITY_RESULTS_PATH)
         data['incremental'] = pd.read_csv(INCREMENTAL_RESULTS_PATH)
         data['outliers'] = pd.read_csv(OUTLIER_RESULTS_PATH)
+
+        # Mapa taxonómico familia → clase (para análisis de errores cross-clase)
+        tax_yaml_path = project_root / "data" / "taxonomic_class_mapping.yaml"
+        family_to_class = {}
+        if tax_yaml_path.exists():
+            with open(tax_yaml_path, 'r', encoding='utf-8') as f:
+                class_to_families = yaml.safe_load(f)
+            for cls, families in class_to_families.items():
+                for fam in (families or []):
+                    family_to_class[fam] = cls
 
         # Mapa de Familias
         df_index = pd.read_csv(DATASET_INDEX_PATH)
@@ -196,7 +207,7 @@ def main():
                     y_p = df_pred[col_pred]
 
                     if not out_tax.exists() or not tax_svg.exists():
-                        err_counts = analysis.analyze_taxonomic_errors(y_true, y_p, df_index)
+                        err_counts = analysis.analyze_taxonomic_errors(y_true, y_p, df_index, family_to_class)
                         viz.plot_taxonomic_errors(err_counts, f"{model_name} + {clf_name}", out_tax)
 
                     if not out_ivc.exists() or not ivc_svg.exists():

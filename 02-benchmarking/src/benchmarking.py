@@ -303,7 +303,7 @@ class ModelEvaluator:
             'KNN (k=5)': KNeighborsClassifier(n_neighbors=5, metric='cosine'), # Más robusto que k=1
             'Linear SVM': LinearSVC(C=1.0, dual="auto", max_iter=2000), # El estándar de oro para embeddings
             'RBF SVM': SVC(C=1.0, kernel='rbf', gamma='scale', max_iter=2000), # Captura relaciones no lineales
-            'Random Forest': RandomForestClassifier(n_estimators=100, n_jobs=-1), # Clasificador basado en árboles
+            'Random Forest': RandomForestClassifier(n_estimators=100, n_jobs=-1, random_state=29), # Clasificador basado en árboles
             'Faiss KNN (k=1)': FaissKNNClassifier(k=1), # KNN rápido con FAISS
             'Faiss KNN (k=3)': FaissKNNClassifier(k=3), # KNN rápido con FAISS
             'Faiss KNN (k=5)': FaissKNNClassifier(k=5), # KNN rápido con FAISS

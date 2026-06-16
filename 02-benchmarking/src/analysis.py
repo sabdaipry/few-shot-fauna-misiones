@@ -13,33 +13,43 @@ def _get_species_column(df_index):
     return 'species' if 'species' in df_index.columns else 'class_name'
 
 
-def analyze_taxonomic_errors(y_true, y_pred, df_index):
+def analyze_taxonomic_errors(y_true, y_pred, df_index, family_to_class=None):
     """
     Calcula el desglose de errores taxonómicos.
-    Retorna un diccionario con conteos: Correct, Mild (Género), Medium (Familia), Severe.
+    Retorna un diccionario con conteos: Correct, Mild (Género), Medium (Familia),
+    Severe (misma clase, familia distinta), Critical (clase distinta).
+
+    family_to_class: dict {familia: clase} para distinguir Severe de Critical.
+                     Si es None, todo lo que no es Mild/Medium cae en Severe.
     """
     species_col = _get_species_column(df_index)
 
     if species_col not in df_index.columns or 'genus' not in df_index.columns or 'family' not in df_index.columns:
-        return {'Correct': 0, 'Mild': 0, 'Medium': 0, 'Severe': len(y_true)}
+        return {'Correct': 0, 'Mild': 0, 'Medium': 0, 'Severe': len(y_true), 'Critical': 0}
 
     s2g = dict(zip(df_index[species_col], df_index['genus']))
     s2f = dict(zip(df_index[species_col], df_index['family']))
 
-    counts = {'Correct': 0, 'Mild': 0, 'Medium': 0, 'Severe': 0}
+    s2c = {}
+    if family_to_class:
+        for species, family in s2f.items():
+            cls = family_to_class.get(family)
+            if cls is not None:
+                s2c[species] = cls
+
+    counts = {'Correct': 0, 'Mild': 0, 'Medium': 0, 'Severe': 0, 'Critical': 0}
 
     for t, p in zip(y_true, y_pred):
         if t == p:
             counts['Correct'] += 1
-        # Si falla especie, chequeamos género
         elif s2g.get(t) == s2g.get(p) and s2g.get(t) is not None:
             counts['Mild'] += 1
-        # Si falla género, chequeamos familia
         elif s2f.get(t) == s2f.get(p) and s2f.get(t) is not None:
             counts['Medium'] += 1
-        # Si falla todo
-        else:
+        elif s2c.get(t) == s2c.get(p) and s2c.get(t) is not None:
             counts['Severe'] += 1
+        else:
+            counts['Critical'] += 1
 
     return counts
 
