@@ -112,9 +112,40 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
         table_out_html = df_out[cols_out].round(4).to_html(classes=table_class, index=False, border=0)
         
     # Tabla Completa (Aquí sí mostramos todo, o filtramos? Mejor filtrar FAISS por limpieza)
-    df_full_display = df_clean.sort_values("Accuracy", ascending=False)
-    # cols_show = [c for c in ['Embedding Model', 'Classifier', 'Accuracy', 'F1_Macro', 'Dim', 'Silhouette Score', 'Davies-Bouldin Index', 'Calinski-Harabasz Index'] if c in df_full_display.columns]
-    table_main_html = df_full_display.round(4).to_html(classes=table_class, index=False, border=0)
+    df_full_display = df_clean.sort_values("Accuracy", ascending=False).copy()
+
+    # Traer tiempo de backbone (extracción de embeddings) desde backbones_times.csv
+    # y combinarlo con el tiempo de clasificador ya presente en el summary.
+    if 'times' in data and not data['times'].empty:
+        df_times = standardize_columns(data['times'])
+        if 'Backbone Time (ms)' in df_times.columns:
+            df_full_display = df_full_display.merge(
+                df_times[['Embedding Model', 'Backbone Time (ms)']],
+                on='Embedding Model', how='left'
+            )
+
+    if 'Backbone Time (ms)' in df_full_display.columns and 'Classifier Time (ms)' in df_full_display.columns:
+        df_full_display['Total Time (ms)'] = (
+            df_full_display['Backbone Time (ms)'] + df_full_display['Classifier Time (ms)']
+        )
+
+    # Orden de columnas solicitado (se omiten silenciosamente las que no existan)
+    cols_order = [c for c in [
+        'Embedding Model', 'Classifier', 'Accuracy', 'Top-5 Accuracy', 'F1_Macro',
+        'Precision', 'Recall', 'Backbone Time (ms)', 'Classifier Time (ms)',
+        'Total Time (ms)', 'Dim', 'Silhouette Score', 'Davies-Bouldin Index',
+        'Calinski-Harabasz Index'
+    ] if c in df_full_display.columns]
+    df_full_display = df_full_display[cols_order]
+
+    # Tiempos en ms se redondean a 1 decimal; el resto de las métricas a 4.
+    round_dict = {c: 1 for c in ['Backbone Time (ms)', 'Total Time (ms)'] if c in df_full_display.columns}
+    for c in df_full_display.columns:
+        if c not in round_dict and pd.api.types.is_numeric_dtype(df_full_display[c]):
+            round_dict[c] = 4
+    df_full_display = df_full_display.round(round_dict)
+
+    table_main_html = df_full_display.to_html(classes=table_class, index=False, border=0)
 
     # 5. Galería UMAP (ordenada)
     sorted_umaps = sorted(umap_files.items(), key=get_custom_sort_key)
