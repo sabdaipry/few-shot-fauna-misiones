@@ -598,3 +598,125 @@ def plot_ivc_ranking(df_pivot, output_path="ivc_ranking.png", order=None):
     plt.xticks(rotation=45, ha='right')
 
     _save_figure(output_path)
+
+
+def plot_taxclass_heatmap(results_dict, backbone_names, output_path):
+    """
+    Heatmap doble (side-by-side): accuracy intra-clase y tasa de error
+    crítico por backbone x clase taxonómica (Mammalia/Aves/Reptilia).
+
+    results_dict: {backbone: {'accuracy': df, 'critical_rate': df}}, salida
+                   de analysis.analyze_performance_by_taxclass por backbone
+                   (df 'accuracy' con columnas ['clase', 'n_samples',
+                   'accuracy']; df 'critical_rate' con ['clase', 'n_samples',
+                   'critical_rate']).
+    backbone_names: lista de backbones, fija el orden de filas (ej. el
+                     top-5 por Accuracy global).
+    """
+    class_order = ['Mammalia', 'Aves', 'Reptilia']
+
+    acc_matrix = pd.DataFrame(index=backbone_names, columns=class_order, dtype=float)
+    crit_matrix = pd.DataFrame(index=backbone_names, columns=class_order, dtype=float)
+    n_samples_map = {}
+
+    for bb in backbone_names:
+        res = results_dict.get(bb)
+        if res is None:
+            continue
+        df_acc = res['accuracy'].set_index('clase')
+        df_crit = res['critical_rate'].set_index('clase')
+        for cls in class_order:
+            if cls in df_acc.index:
+                acc_matrix.loc[bb, cls] = df_acc.loc[cls, 'accuracy']
+                n_samples_map.setdefault(cls, int(df_acc.loc[cls, 'n_samples']))
+            if cls in df_crit.index:
+                crit_matrix.loc[bb, cls] = df_crit.loc[cls, 'critical_rate']
+
+    # Etiquetas de columna con tamaño de muestra (n_samples es el mismo para
+    # todos los backbones: el conjunto query es idéntico entre ellos).
+    col_labels = [f"{cls}\n(n={n_samples_map.get(cls, '?')})" for cls in class_order]
+    acc_matrix.columns = col_labels
+    crit_matrix.columns = col_labels
+
+    # Anotaciones como texto: accuracy con 3 decimales, critical_rate con 1
+    # decimal y símbolo '%' para distinguirlas visualmente a simple vista.
+    crit_annot = crit_matrix.astype(object)
+    for r in crit_matrix.index:
+        for c in crit_matrix.columns:
+            v = crit_matrix.loc[r, c]
+            crit_annot.loc[r, c] = f"{v:.1f}%" if pd.notna(v) else ""
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, max(6, 0.8 * len(backbone_names))))
+
+    sns.heatmap(
+        acc_matrix, annot=True, fmt=".3f", cmap="RdYlGn", vmin=0, vmax=1,
+        cbar_kws={'label': 'Accuracy'}, annot_kws={'fontsize': 18},
+        linewidths=.5, linecolor='white', ax=axes[0]
+    )
+    axes[0].set_title("Accuracy intra-clase", fontweight='bold')
+    axes[0].set_xlabel("Clase Taxonómica")
+    axes[0].set_ylabel("Backbone")
+    axes[0].tick_params(axis='both', labelsize=16)
+
+    sns.heatmap(
+        crit_matrix, annot=crit_annot, fmt="", cmap="RdYlGn_r",
+        cbar_kws={'label': '% Error Crítico'}, annot_kws={'fontsize': 18},
+        linewidths=.5, linecolor='white', ax=axes[1]
+    )
+    axes[1].set_title("Tasa de Error Crítico\n(predicción fuera de la clase)", fontweight='bold')
+    axes[1].set_xlabel("Clase Taxonómica")
+    axes[1].set_ylabel("")
+    axes[1].tick_params(axis='both', labelsize=16)
+
+    fig.suptitle("Desempeño por Clase Taxonómica (Top-5 Backbones, Linear SVM)", fontweight='bold', color='#1b4f25', fontsize=20)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+
+    _save_figure(output_path, fig=fig)
+
+
+def plot_taxclass_confusion(confusion_dict, backbone_names, output_path):
+    """
+    Matrices de confusión 3x3 (Mammalia/Aves/Reptilia) entre clase
+    taxonómica verdadera y predicha, una por backbone, en subplots
+    dispuestos en una fila.
+
+    confusion_dict: {backbone: df 3x3 (índice=clase verdadera, columnas=
+                     clase predicha, valores en % normalizados por fila)},
+                     salida de analysis.compute_taxclass_confusion por
+                     backbone.
+    backbone_names: lista de backbones, fija el orden y la cantidad de
+                     subplots (ej. el top-5 por Accuracy global).
+    """
+    n = len(backbone_names)
+    fig, axes = plt.subplots(1, n, figsize=(4.2 * n, 4.8))
+    if n == 1:
+        axes = [axes]
+
+    for i, (ax, bb) in enumerate(zip(axes, backbone_names)):
+        df_cm = confusion_dict.get(bb)
+        if df_cm is None:
+            ax.axis('off')
+            continue
+
+        annot = df_cm.astype(object)
+        for r in df_cm.index:
+            for c in df_cm.columns:
+                annot.loc[r, c] = f"{df_cm.loc[r, c]:.1f}%"
+
+        sns.heatmap(
+            df_cm, annot=annot, fmt="", cmap="Blues", vmin=0, vmax=100,
+            cbar_kws={'label': '% Clase Verdadera'}, annot_kws={'fontsize': 18},
+            linewidths=.5, linecolor='white', ax=ax, square=True
+        )
+        ax.set_title(bb, fontweight='bold')
+        ax.set_xlabel("Clase Predicha")
+        ax.set_ylabel("Clase Verdadera" if i == 0 else "")
+        ax.tick_params(axis='both', labelsize=16)
+
+    fig.suptitle(
+        "Matriz de Confusión por Clase Taxonómica (Top-5 Backbones, Linear SVM)",
+        fontweight='bold', color='#1b4f25', fontsize=20
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+
+    _save_figure(output_path, fig=fig)

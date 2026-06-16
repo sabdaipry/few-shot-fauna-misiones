@@ -238,7 +238,37 @@ def main():
         order=df_err_rank['Embedding Model'].tolist()
     )
 
-    # vi. Generar HTML
+    # vi. Análisis por Clase Taxonómica (Top-5 backbones por Accuracy, Linear SVM)
+    logger.info("Generando análisis de desempeño por clase taxonómica (top-5 backbones)...")
+    TOP5_BACKBONES = ['bioclip_v2', 'dinov2_base', 'dinov3_base', 'siglip2_so400m', 'dinov2_small']
+    taxclass_results = {}
+    confusion_results = {}
+    for model_name in TOP5_BACKBONES:
+        pred_path = BENCHMARK_RESULTS_DIR / f"predictions_{model_name}.csv"
+        if not pred_path.exists():
+            logger.warning(f"No se encontró {pred_path.name}, se omite del análisis por clase taxonómica.")
+            continue
+        df_pred_tc = pd.read_csv(pred_path)
+        if 'pred_Linear SVM' not in df_pred_tc.columns:
+            logger.warning(f"{pred_path.name} no tiene columna 'pred_Linear SVM', se omite.")
+            continue
+        taxclass_results[model_name] = analysis.analyze_performance_by_taxclass(
+            df_pred_tc, 'pred_Linear SVM', df_index, family_to_class
+        )
+        confusion_results[model_name] = analysis.compute_taxclass_confusion(
+            df_pred_tc, 'pred_Linear SVM', df_index, family_to_class
+        )
+
+    if taxclass_results:
+        present_top5 = [b for b in TOP5_BACKBONES if b in taxclass_results]
+        viz.plot_taxclass_heatmap(
+            taxclass_results, present_top5, FIG_DIR / "08_taxclass_analysis.png"
+        )
+        viz.plot_taxclass_confusion(
+            confusion_results, present_top5, FIG_DIR / "09_confusion_matrix_taxclass.png"
+        )
+
+    # vii. Generar HTML
     # 4. HTML Generación
     logger.info("Maquetando HTML Interactivo...")
     

@@ -217,6 +217,16 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
                     <img src="figures/07_ivc_ranking.png" class="img-fluid" alt="Ranking de Desempeño IVC por Backbone">
                 </div></div>
             </div>
+            <div class="col-md-12">
+                <div class="card"><div class="card-body text-center">
+                    <img src="figures/08_taxclass_analysis.png" class="img-fluid" alt="Desempeño por Clase Taxonómica (Top-5 Backbones)">
+                </div></div>
+            </div>
+            <div class="col-md-12">
+                <div class="card"><div class="card-body text-center">
+                    <img src="figures/09_confusion_matrix_taxclass.png" class="img-fluid" alt="Matriz de Confusión por Clase Taxonómica (Top-5 Backbones)">
+                </div></div>
+            </div>
         </div>
 
         <h3 class="section-title">⚔️ Comparación de Desempeño Taxonómico</h3>

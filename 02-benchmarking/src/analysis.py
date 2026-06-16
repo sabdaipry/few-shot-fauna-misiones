@@ -5,9 +5,12 @@ Funciones de análisis post-benchmarking.
   (género, familia, severo).
 - analyze_ivc_performance: agrupa aciertos/fallos por categoría del
   Índice de Valor de Conservación (IVC).
+- analyze_performance_by_taxclass: accuracy intra-clase y tasa de error
+  crítico por clase taxonómica (Mammalia/Aves/Reptilia).
 """
 import numpy as np
 import pandas as pd
+from sklearn.metrics import accuracy_score
 
 
 def _get_species_column(df_index):
@@ -172,3 +175,89 @@ def summarize_ivc_performance_by_backbone(records):
     )
     df_pivot = df_mean.pivot(index='Embedding Model', columns='Category', values='Pct_Correct')
     return df_pivot
+
+
+def analyze_performance_by_taxclass(df_pred, clf_col, df_index, family_to_class):
+    """
+    Calcula accuracy intra-clase y tasa de error crítico por clase taxonómica
+    (Mammalia/Aves/Reptilia), usando un único clasificador (clf_col).
+
+    df_pred: DataFrame de predictions_<backbone>.csv. Debe tener columnas
+             'y_true', clf_col (ej. 'pred_Linear SVM') y 'family' (familia
+             de y_true, ya viene mergeada en el CSV).
+    clf_col: nombre de la columna de predicción a usar.
+    df_index: dataset_index.csv, usado por analyze_taxonomic_errors para
+              resolver género/familia de las especies predichas (necesario
+              para distinguir error Crítico de los demás niveles).
+    family_to_class: dict {familia: clase} (taxonomic_class_mapping.yaml).
+
+    Retorna un dict con dos DataFrames:
+    - 'accuracy': columnas ['clase', 'n_samples', 'accuracy']
+    - 'critical_rate': columnas ['clase', 'n_samples', 'critical_rate']
+      (% de predicciones que caen fuera de la clase taxonómica verdadera)
+    """
+    y_true = df_pred['y_true']
+    y_pred = df_pred[clf_col]
+    true_class = df_pred['family'].map(family_to_class)
+
+    acc_rows = []
+    crit_rows = []
+    for clase in sorted(true_class.dropna().unique()):
+        mask = true_class == clase
+        n = int(mask.sum())
+        if n == 0:
+            continue
+
+        yt_sub = y_true[mask]
+        yp_sub = y_pred[mask]
+
+        acc = accuracy_score(yt_sub, yp_sub)
+        acc_rows.append({'clase': clase, 'n_samples': n, 'accuracy': acc})
+
+        err_counts = analyze_taxonomic_errors(yt_sub, yp_sub, df_index, family_to_class)
+        total = sum(err_counts.values())
+        critical_rate = (err_counts['Critical'] / total * 100) if total > 0 else 0.0
+        crit_rows.append({'clase': clase, 'n_samples': n, 'critical_rate': critical_rate})
+
+    return {
+        'accuracy': pd.DataFrame(acc_rows, columns=['clase', 'n_samples', 'accuracy']),
+        'critical_rate': pd.DataFrame(crit_rows, columns=['clase', 'n_samples', 'critical_rate']),
+    }
+
+
+def compute_taxclass_confusion(df_pred, clf_col, df_index, family_to_class):
+    """
+    Matriz de confusión 3x3 entre clase taxonómica verdadera y predicha
+    (Mammalia/Aves/Reptilia), usando un único clasificador (clf_col).
+
+    df_pred: DataFrame de predictions_<backbone>.csv. Debe tener columnas
+             'y_true', clf_col (ej. 'pred_Linear SVM') y 'family' (familia
+             de y_true, ya viene mergeada en el CSV).
+    clf_col: nombre de la columna de predicción a usar.
+    df_index: dataset_index.csv, usado para resolver la familia de las
+              especies predichas (vía columna 'species'/'class_name').
+    family_to_class: dict {familia: clase} (taxonomic_class_mapping.yaml).
+
+    Retorna un DataFrame 3x3 (índice=clase verdadera, columnas=clase
+    predicha) con porcentajes normalizados por fila (cada fila suma ~100%;
+    puede ser <100% si alguna especie predicha no resuelve a una clase
+    conocida, lo cual no debería ocurrir en este dataset).
+    """
+    class_order = ['Mammalia', 'Aves', 'Reptilia']
+    species_col = _get_species_column(df_index)
+    s2f = dict(zip(df_index[species_col], df_index['family']))
+
+    true_class = df_pred['family'].map(family_to_class)
+    pred_class = df_pred[clf_col].map(s2f).map(family_to_class)
+
+    counts = pd.DataFrame(0.0, index=class_order, columns=class_order)
+    for t_cls in class_order:
+        mask = true_class == t_cls
+        n = int(mask.sum())
+        if n == 0:
+            continue
+        sub_pred = pred_class[mask]
+        for p_cls in class_order:
+            counts.loc[t_cls, p_cls] = (sub_pred == p_cls).sum() / n * 100
+
+    return counts
