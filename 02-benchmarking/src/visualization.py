@@ -128,10 +128,11 @@ def plot_leaderboard(df, metric="Accuracy", output_path="leaderboard.png"):
     plt.ylabel("")
     plt.xlim(0, 1.08)
     plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tick_params(labelsize=16)
 
     # Etiquetas de valor
     for i, v in enumerate(df_best[metric]):
-        ax.text(v + 0.005, i, f"{v:.4f}", va='center', fontsize=11, fontweight='bold')
+        ax.text(v + 0.005, i, f"{v:.4f}", va='center', fontsize=18, fontweight='bold')
 
     _save_figure(output_path)
 
@@ -149,8 +150,8 @@ def plot_heatmap(df, metric="Accuracy", output_path="heatmap.png"):
     pivot_df = pivot_df.sort_values('mean', ascending=False).drop('mean', axis=1)
 
     plt.figure(figsize=(16, 14))
-    ax = sns.heatmap(pivot_df, annot=True, fmt=".3f", cmap="Greens", cbar_kws={'label': metric}, annot_kws={'fontsize': 16}, linewidths=.5, linecolor='white')
-    ax.tick_params(axis='both', labelsize=14)
+    ax = sns.heatmap(pivot_df, annot=True, fmt=".3f", cmap="Greens", cbar_kws={'label': metric}, annot_kws={'fontsize': 18}, linewidths=.5, linecolor='white')
+    ax.tick_params(axis='both', labelsize=16)
 
     plt.title(f"Performance: Backbone vs Clasificador ({metric})", fontweight='bold')
     plt.ylabel("Backbone")
@@ -282,7 +283,7 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
     for met in metrics:
         if met not in df.columns: continue
 
-        plt.figure(figsize=(12, 7))
+        plt.figure(figsize=(13, 7))
         # Ordenar (Silhouette/Calinski: Mayor mejor, Davies: Menor mejor)
         ascending = True if "Davies" in met else False
         df_sorted = df_unique.sort_values(met, ascending=ascending)
@@ -293,7 +294,7 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
         # Etiqueta eje X (Silhouette/Calinski: Mayor mejor, Davies: Menor mejor)
         x_label = f"{met} (Menor mejor)" if "Davies" in met else f"{met} (Mayor mejor)"
 
-        sns.barplot(
+        ax = sns.barplot(
             data=df_sorted,
             y="Embedding Model",
             x=met,
@@ -306,6 +307,14 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
         plt.title(f"Calidad del Espacio Latente: {met}", fontweight='bold')
         plt.xlabel(x_label)
         plt.ylabel("")
+        plt.tick_params(labelsize=16)
+
+        # Etiquetas de valor al final de cada barra (CH tiene escala mucho mayor: 2 decimales; SC/DBI: 4)
+        value_fmt = "{:.2f}" if "Calinski" in met else "{:.4f}"
+        offset = df_sorted[met].max() * 0.02
+        for i, v in enumerate(df_sorted[met]):
+            ax.text(v + offset, i, value_fmt.format(v), va='center', fontsize=18, fontweight='bold')
+        ax.margins(x=0.15)  # espacio extra para que las etiquetas no se corten
 
         safe_name = met.replace(' ', '_').lower()
         _save_figure(f"{output_path_prefix}_{safe_name}.png")
@@ -438,16 +447,17 @@ def plot_taxonomic_errors(error_counts, model_name, output_path):
     bars = plt.bar(labels, percentages, color=colors, edgecolor='black', alpha=0.8)
 
     plt.title(f"Desglose Taxonómico de Errores: {model_name}", fontweight='bold', color='#1b4f25')
-    plt.ylabel("Porcentaje de Predicciones (%)")
+    plt.ylabel("Porcentaje de Predicciones (%)", fontsize=16)
     plt.ylim(0, 105)
     plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tick_params(axis='x', labelsize=16)
 
     # Etiquetas de valor
     for bar in bars:
         height = bar.get_height()
         if height > 0:
             plt.text(bar.get_x() + bar.get_width()/2., height + 1,
-                     f'{height:.1f}%', ha='center', va='bottom', fontweight='bold')
+                     f'{height:.1f}%', ha='center', va='bottom', fontweight='bold', fontsize=18)
 
     _save_figure(output_path)
 
@@ -490,14 +500,16 @@ def plot_ivc_performance(df_ivc, model_name, output_path):
     )
 
     plt.title(f"Desempeño Normalizado por IVC: {model_name}", fontweight='bold', color='#1b4f25')
-    plt.xlabel("Categoría de Conservación")
-    plt.ylabel("Porcentaje de Muestras (%)")
+    plt.xlabel("Categoría de Conservación", fontsize=16)
+    plt.ylabel("Porcentaje de Muestras (%)", fontsize=16)
     plt.legend(title="Predicción", bbox_to_anchor=(1.02, 1), loc='upper left')
     plt.ylim(0, 105) # Escala fija 0-100%
     plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.tick_params(axis='x', labelsize=16)
+    plt.tick_params(axis='y', labelsize=16)
 
     # 6. Etiquetas de valor (opcional, para claridad)
     for container in ax.containers:
-        ax.bar_label(container, fmt='%.0f%%', fontsize=11, padding=3)
+        ax.bar_label(container, fmt='%.0f%%', fontsize=18, fontweight='bold', padding=3)
 
     _save_figure(output_path)
