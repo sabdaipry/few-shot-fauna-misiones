@@ -10,7 +10,7 @@ Guarda:
 - data/benchmark_results/distance_distributions.npz  (intra/inter para TODAS las métricas)
 - figures/distance_benchmark_accuracy.{svg,png}
 - figures/distance_benchmark_latency.{svg,png}
-- figures/distance_distributions.{svg,png}
+- figures/distance_distributions_{backbone}.{svg,png}  (una figura 2×2 por backbone)
 
 Uso:
     python scripts/08_distance_benchmark.py
@@ -24,6 +24,7 @@ from typing import Callable
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -44,11 +45,14 @@ logger = setup_logger("distance_benchmark", log_dir=_PROJECT_ROOT / "logs")
 DATASET_INDEX_PATH = _PROJECT_ROOT / "data" / "dataset_index.csv"
 FEATURES_DIR = _PROJECT_ROOT / "data" / "features"
 BENCHMARK_RESULTS_DIR = _PROJECT_ROOT / "data" / "benchmark_results"
-FIGURES_DIR = _PROJECT_ROOT / "figures"
+FIGURES_DIR = _PROJECT_ROOT / "data" / "reports" / "figures"
 
 BACKBONES: dict[str, int] = {
-    "bioclip_v2": 768,
-    "dinov2_small": 384,
+    "bioclip_v2":      768,
+    "dinov3_small":    384,
+    "dinov2_small":    384,
+    "resnet50":        2048,
+    "convnextv2_tiny": 768,
 }
 
 METRICS: list[str] = [
@@ -61,11 +65,12 @@ METRICS: list[str] = [
 WARMUP_ITERS = 10
 
 # Paleta fija para los plots
+_GREENS = cm.get_cmap("Greens")
 _METRIC_COLORS = {
-    "cosine": "#4C72B0",
-    "euclidean": "#DD8452",
-    "euclidean_l2norm": "#55A868",
-    "manhattan": "#C44E52",
+    "cosine":           _GREENS(0.9),
+    "euclidean":        _GREENS(0.7),
+    "euclidean_l2norm": _GREENS(0.55),
+    "manhattan":        _GREENS(0.4),
 }
 
 
@@ -348,47 +353,63 @@ def plot_distance_distributions(
     results_df: pd.DataFrame,
     out_dir: Path,
 ) -> None:
-    """Histogramas superpuestos intra vs inter-clase para la métrica ganadora
-    de cada backbone (2 subplots, uno por backbone).
+    """Genera una figura 2×2 por backbone con histogramas intra vs inter-clase
+    para cada métrica. Una figura por backbone, guardada como
+    distance_distributions_{backbone}.{svg,png}.
 
     Args:
         distributions: {backbone: {metric: (intra, inter)}}.
-        results_df: DataFrame con columna is_best para identificar la métrica ganadora.
+        results_df: DataFrame con columnas backbone, metric, accuracy.
         out_dir: Directorio de salida para las figuras.
     """
-    backbones = list(distributions.keys())
-    fig, axes = plt.subplots(1, len(backbones), figsize=(7 * len(backbones), 5))
-    if len(backbones) == 1:
-        axes = [axes]
+    COLOR_INTRA = "#2d6a4f"  # verde oscuro
+    COLOR_INTER = "#95d5b2"  # verde claro
 
-    for ax, backbone in zip(axes, backbones):
-        best_row = results_df[(results_df["backbone"] == backbone) & results_df["is_best"]]
-        if best_row.empty:
-            ax.set_title(f"{backbone}\n(sin datos)")
-            continue
-        best_metric = best_row.iloc[0]["metric"]
-        best_acc = best_row.iloc[0]["accuracy"]
+    for backbone, metric_dists in distributions.items():
+        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        axes_flat = axes.flatten()
 
-        intra, inter = distributions[backbone][best_metric]
-        intra_clean = intra[~np.isnan(intra)]
-        inter_clean = inter[~np.isnan(inter)]
+        for ax, metric in zip(axes_flat, METRICS):
+            if metric not in metric_dists:
+                ax.set_visible(False)
+                continue
 
-        bins = 60
-        ax.hist(intra_clean, bins=bins, alpha=0.6, label="Intra-clase", color="#2ecc71", density=True)
-        ax.hist(inter_clean, bins=bins, alpha=0.6, label="Inter-clase", color="#e74c3c", density=True)
-        ax.set_xlabel("Distancia")
-        ax.set_ylabel("Densidad")
-        ax.set_title(f"{backbone}\nMétrica: {best_metric}  |  Acc={best_acc:.3f}")
-        ax.legend()
-        ax.grid(alpha=0.3)
+            intra, inter = metric_dists[metric]
+            intra_clean = intra[~np.isnan(intra)]
+            inter_clean = inter[~np.isnan(inter)]
 
-    fig.suptitle("Distribuciones de distancia intra vs inter-clase (métrica ganadora)", y=1.02)
-    fig.tight_layout()
+            row = results_df[
+                (results_df["backbone"] == backbone) & (results_df["metric"] == metric)
+            ]
+            acc = row.iloc[0]["accuracy"] if not row.empty else float("nan")
 
-    for ext in ("svg", "png"):
-        fig.savefig(out_dir / f"distance_distributions.{ext}", dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Figura guardada: {out_dir}/distance_distributions.{{svg,png}}")
+            ax.hist(intra_clean, bins=60, alpha=0.6, label="Intra-clase",
+                    color=COLOR_INTRA, density=True)
+            ax.hist(inter_clean, bins=60, alpha=0.6, label="Inter-clase",
+                    color=COLOR_INTER, density=True)
+            ax.set_xlabel("Distancia")
+            ax.set_ylabel("Densidad")
+            ax.set_title(f"{metric}  |  Acc={acc:.3f}")
+            ax.legend()
+            ax.grid(alpha=0.3)
+
+        for ax in axes_flat[len(METRICS):]:
+            ax.set_visible(False)
+
+        fig.suptitle(backbone, fontsize=14, fontweight="bold")
+        fig.tight_layout()
+
+        fname = backbone.replace("/", "_").replace(" ", "_")
+        for ext in ("svg", "png"):
+            fig.savefig(
+                out_dir / f"distance_distributions_{fname}.{ext}",
+                dpi=150,
+                bbox_inches="tight",
+            )
+        plt.close(fig)
+        logger.info(
+            f"Figura guardada: {out_dir}/distance_distributions_{fname}.{{svg,png}}"
+        )
 
 
 # ---------------------------------------------------------------------------
