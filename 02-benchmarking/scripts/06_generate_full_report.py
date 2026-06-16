@@ -155,7 +155,9 @@ def main():
     logger.info(f"Clasificadores encontrados para el menú: {valid_classifiers}")
     
     umap_files = {}
-    
+    tax_records = []  # Conteos crudos por backbone×clasificador, para 06_error_ranking
+    ivc_records = []  # DataFrames Category/Correct/Incorrect por backbone×clasificador, para 07_ivc_ranking
+
     evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
     logging.getLogger("backbones").setLevel(logging.ERROR)
     
@@ -196,26 +198,45 @@ def main():
             for col_pred in pred_cols:
                 clf_name = col_pred.replace('pred_', '')
                 clf_slug = clean_filename(clf_name)
-                
+                y_p = df_pred[col_pred]
+
                 out_tax = ERR_DIR / f"tax_error_{model_name}_{clf_slug}.png"
                 out_ivc = IVC_DIR / f"ivc_perf_{model_name}_{clf_slug}.png"
-                
-                # Generar solo si no existen
                 tax_svg = out_tax.with_suffix('.svg')
                 ivc_svg = out_ivc.with_suffix('.svg')
-                if not out_tax.exists() or not out_ivc.exists() or not tax_svg.exists() or not ivc_svg.exists():
-                    y_p = df_pred[col_pred]
 
-                    if not out_tax.exists() or not tax_svg.exists():
-                        err_counts = analysis.analyze_taxonomic_errors(y_true, y_p, df_index, family_to_class)
-                        viz.plot_taxonomic_errors(err_counts, f"{model_name} + {clf_name}", out_tax)
+                # El cálculo (analyze_*, sobre pandas ya en memoria) es barato y se
+                # hace siempre para alimentar las figuras de resumen 06/07. El guard
+                # de caché solo evita el _save_figure costoso (600 DPI) cuando la
+                # figura individual de esta combinación ya existe.
+                err_counts = analysis.analyze_taxonomic_errors(y_true, y_p, df_index, family_to_class)
+                tax_records.append({**err_counts, 'Embedding Model': model_name, 'Classifier': clf_name})
+
+                if not out_tax.exists() or not tax_svg.exists():
+                    viz.plot_taxonomic_errors(err_counts, f"{model_name} + {clf_name}", out_tax)
+
+                df_ivc = analysis.analyze_ivc_performance(y_true, y_p, df_index)
+                if df_ivc is not None:
+                    df_ivc_tagged = df_ivc.copy()
+                    df_ivc_tagged['Embedding Model'] = model_name
+                    df_ivc_tagged['Classifier'] = clf_name
+                    ivc_records.append(df_ivc_tagged)
 
                     if not out_ivc.exists() or not ivc_svg.exists():
-                        df_ivc = analysis.analyze_ivc_performance(y_true, y_p, df_index)
-                        if df_ivc is not None:
-                            viz.plot_ivc_performance(df_ivc, f"{model_name} + {clf_name}", out_ivc)
+                        viz.plot_ivc_performance(df_ivc, f"{model_name} + {clf_name}", out_ivc)
 
         gc.collect()
+
+    # v. Figuras de Resumen Comparativo (Ranking de Errores Taxonómicos e IVC, por Backbone)
+    logger.info("Generando figuras de resumen comparativo (ranking de errores e IVC)...")
+    df_err_rank = analysis.summarize_taxonomic_errors_by_backbone(tax_records)
+    viz.plot_error_ranking(df_err_rank, FIG_DIR / "06_error_ranking.png")
+
+    df_ivc_rank = analysis.summarize_ivc_performance_by_backbone(ivc_records)
+    viz.plot_ivc_ranking(
+        df_ivc_rank, FIG_DIR / "07_ivc_ranking.png",
+        order=df_err_rank['Embedding Model'].tolist()
+    )
 
     # vi. Generar HTML
     # 4. HTML Generación

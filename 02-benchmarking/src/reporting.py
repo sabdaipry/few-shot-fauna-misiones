@@ -204,6 +204,21 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
         <h3 class="section-title">🏆 Top 10 Combinaciones (Accuracy)</h3>
         <div class="row mb-4 justify-content-center g-3">{top_cards_html}</div>
 
+        <h3 class="section-title">📊 Resumen Comparativo por Backbone</h3>
+        <p class="text-muted">Promedio sobre los 7 clasificadores evaluados para cada backbone.</p>
+        <div class="row">
+            <div class="col-md-12 mb-4">
+                <div class="card"><div class="card-body text-center">
+                    <img src="figures/06_error_ranking.png" class="img-fluid" alt="Ranking de Errores Taxonómicos por Backbone">
+                </div></div>
+            </div>
+            <div class="col-md-12">
+                <div class="card"><div class="card-body text-center">
+                    <img src="figures/07_ivc_ranking.png" class="img-fluid" alt="Ranking de Desempeño IVC por Backbone">
+                </div></div>
+            </div>
+        </div>
+
         <h3 class="section-title">⚔️ Comparación de Desempeño Taxonómico</h3>
 
         <div class="card mb-4">

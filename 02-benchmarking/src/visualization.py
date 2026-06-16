@@ -440,8 +440,8 @@ def plot_taxonomic_errors(error_counts, model_name, output_path):
     total = sum(values)
     percentages = [v/total*100 for v in values]
 
-    # Colores semánticos: Verde -> Amarillo -> Naranja -> Rojo -> Púrpura
-    colors = ['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c', '#8e44ad']
+    # Colores semánticos: Verde -> Amarillo -> Naranja -> Rojo -> Rojo oscuro
+    colors = ['#2ecc71', '#f1c40f', '#e67e22', '#e74c3c', '#922b21']
 
     plt.figure(figsize=(14, 7))
     bars = plt.bar(labels, percentages, color=colors, edgecolor='black', alpha=0.8)
@@ -511,5 +511,90 @@ def plot_ivc_performance(df_ivc, model_name, output_path):
     # 6. Etiquetas de valor (opcional, para claridad)
     for container in ax.containers:
         ax.bar_label(container, fmt='%.0f%%', fontsize=18, fontweight='bold', padding=3)
+
+    _save_figure(output_path)
+
+
+def plot_error_ranking(df_agg, output_path="error_ranking.png"):
+    """
+    Barplot apilado horizontal: % promedio (sobre los 7 clasificadores) de cada
+    categoría de error taxonómico, por backbone. Ordenado de mayor a menor
+    % Correct (df_agg ya viene ordenado así desde
+    analysis.summarize_taxonomic_errors_by_backbone).
+
+    df_agg: columnas ['Embedding Model', 'Correct', 'Mild', 'Medium', 'Severe', 'Critical'] (%).
+    """
+    cat_cols = ['Correct', 'Mild', 'Medium', 'Severe', 'Critical']
+    colors = {
+        'Correct': '#1b5e20',
+        'Mild': '#f9a825',
+        'Medium': '#e65100',
+        'Severe': '#c62828',
+        'Critical': '#922b21',
+    }
+    labels = {
+        'Correct': 'Correcto',
+        'Mild': 'Leve (Género)',
+        'Medium': 'Medio (Familia)',
+        'Severe': 'Severo (Clase, Familia distinta)',
+        'Critical': 'Crítico (Clase distinta)',
+    }
+
+    # Invertimos el orden: la primera fila (mejor backbone) debe quedar arriba
+    df_plot = df_agg.iloc[::-1].reset_index(drop=True)
+    y_pos = np.arange(len(df_plot))
+
+    plt.figure(figsize=(12, max(6, 0.45 * len(df_plot))))
+    left = np.zeros(len(df_plot))
+    for cat in cat_cols:
+        values = df_plot[cat].values
+        plt.barh(y_pos, values, left=left, color=colors[cat], label=labels[cat],
+                 edgecolor='black', linewidth=0.4)
+        left += values
+
+    plt.yticks(y_pos, df_plot['Embedding Model'])
+    plt.xlim(0, 100)
+    plt.xlabel("Porcentaje de Predicciones (%)", fontsize=16)
+    plt.ylabel("")
+    plt.title("Ranking de Errores Taxonómicos por Backbone", fontweight='bold', color='#1b4f25')
+    plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', title="Categoría")
+    plt.grid(axis='x', linestyle='--', alpha=0.5)
+    plt.tick_params(axis='y', labelsize=16)
+    plt.tick_params(axis='x', labelsize=16)
+
+    _save_figure(output_path)
+
+
+def plot_ivc_ranking(df_pivot, output_path="ivc_ranking.png", order=None):
+    """
+    Heatmap Backbone x Categoría IVC: % Correct promedio (sobre los 7
+    clasificadores) en cada celda.
+
+    df_pivot: índice = Embedding Model, columnas = categorías IVC presentes
+              (salida de analysis.summarize_ivc_performance_by_backbone).
+    order: lista opcional de backbones para fijar el orden de filas (p.ej. el
+           mismo orden que plot_error_ranking, para comparar ambas figuras).
+    """
+    ivc_order = ["Crítico", "Alto", "Medio", "Bajo", "Nulo"]
+    present_cols = [c for c in ivc_order if c in df_pivot.columns]
+    other_cols = [c for c in df_pivot.columns if c not in ivc_order]
+    df_plot = df_pivot[present_cols + other_cols]
+
+    if order is not None:
+        existing = [b for b in order if b in df_plot.index]
+        df_plot = df_plot.loc[existing]
+
+    plt.figure(figsize=(10, max(6, 0.5 * len(df_plot))))
+    ax = sns.heatmap(
+        df_plot, annot=True, fmt=".1f", cmap="RdYlGn", vmin=0, vmax=100,
+        cbar_kws={'label': '% Correcto'}, annot_kws={'fontsize': 18},
+        linewidths=.5, linecolor='white'
+    )
+    ax.tick_params(axis='both', labelsize=16)
+
+    plt.title("Ranking de Desempeño IVC por Backbone", fontweight='bold', color='#1b4f25')
+    plt.xlabel("Categoría IVC", fontsize=16)
+    plt.ylabel("Backbone", fontsize=16)
+    plt.xticks(rotation=45, ha='right')
 
     _save_figure(output_path)

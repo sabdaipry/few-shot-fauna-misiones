@@ -6,6 +6,7 @@ Funciones de análisis post-benchmarking.
 - analyze_ivc_performance: agrupa aciertos/fallos por categoría del
   Índice de Valor de Conservación (IVC).
 """
+import numpy as np
 import pandas as pd
 
 
@@ -116,4 +117,58 @@ def analyze_ivc_performance(y_true, y_pred, df_index):
     if 'Incorrect' not in df_pivot.columns:
         df_pivot['Incorrect'] = 0
 
+    return df_pivot
+
+
+def summarize_taxonomic_errors_by_backbone(records):
+    """
+    Agrega el desglose de errores taxonómicos por backbone, promediando sobre
+    los clasificadores evaluados.
+
+    records: list[dict] con claves 'Embedding Model', 'Classifier' y los
+             conteos crudos de analyze_taxonomic_errors
+             ('Correct', 'Mild', 'Medium', 'Severe', 'Critical').
+    Retorna un DataFrame con columnas
+    ['Embedding Model', 'Correct', 'Mild', 'Medium', 'Severe', 'Critical']
+    (valores en %), ordenado descendente por % Correct.
+    """
+    cat_cols = ['Correct', 'Mild', 'Medium', 'Severe', 'Critical']
+    if not records:
+        return pd.DataFrame(columns=['Embedding Model'] + cat_cols)
+
+    df = pd.DataFrame(records)
+    totals = df[cat_cols].sum(axis=1)
+    for c in cat_cols:
+        df[c] = (df[c] / totals * 100).where(totals > 0, 0)
+
+    df_agg = df.groupby('Embedding Model', as_index=False)[cat_cols].mean()
+    df_agg = df_agg.sort_values('Correct', ascending=False).reset_index(drop=True)
+    return df_agg
+
+
+def summarize_ivc_performance_by_backbone(records):
+    """
+    Agrega el desempeño por categoría IVC por backbone, promediando sobre
+    los clasificadores evaluados.
+
+    records: list[pd.DataFrame], cada uno con columnas
+             ['Embedding Model', 'Classifier', 'Category', 'Correct', 'Incorrect']
+             (salida de analyze_ivc_performance con las columnas de
+             identificación de backbone/clasificador agregadas).
+    Retorna un DataFrame pivot: índice = Embedding Model, columnas =
+    categorías IVC presentes en los datos, valores = % Correct promedio.
+    """
+    if not records:
+        return pd.DataFrame()
+
+    df_all = pd.concat(records, ignore_index=True)
+    total = df_all['Correct'] + df_all['Incorrect']
+    df_all['Pct_Correct'] = np.where(total > 0, df_all['Correct'] / total * 100, np.nan)
+
+    df_mean = (
+        df_all.groupby(['Embedding Model', 'Category'])['Pct_Correct']
+        .mean()
+        .reset_index()
+    )
+    df_pivot = df_mean.pivot(index='Embedding Model', columns='Category', values='Pct_Correct')
     return df_pivot
