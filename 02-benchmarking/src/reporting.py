@@ -92,6 +92,23 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
     </div>
     """
 
+    # 2b. Bootstrap CI (Fase 7, opcional — solo si 07_bootstrap_ci.py ya se corrió)
+    bootstrap_ci_html = ""
+    if data.get('bootstrap_ci') is not None and not data['bootstrap_ci'].empty:
+        bootstrap_ci_html = """
+            <div class="col-md-12">
+                <div class="card"><div class="card-body text-center">
+                    <img src="figures/10_bootstrap_forest.png" class="img-fluid" alt="Bootstrap CI 95% por Backbone (Linear SVM)">
+                    <p class="text-muted small mt-2 mb-0">
+                        IC bootstrap 95% (1000 iteraciones, estratificado por clase) sobre el query set fijo,
+                        para Linear SVM. Estima la varianza por composición del query set; no captura la
+                        incertidumbre del support/gallery set (fijo) ni la correlación entre clasificadores
+                        de un mismo backbone — ver limitaciones metodológicas en scripts/07_bootstrap_ci.py.
+                    </p>
+                </div></div>
+            </div>
+        """
+
     # 3. Opciones para Dropdowns
     bb_options = "".join([f'<option value="{b}">{b}</option>' for b in backbones_list])
     # Para los clasificadores, ponemos 'Nearest Centroid' primero por defecto si existe
@@ -227,6 +244,7 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
                     <img src="figures/09_confusion_matrix_taxclass.png" class="img-fluid" alt="Matriz de Confusión por Clase Taxonómica (Top-5 Backbones)">
                 </div></div>
             </div>
+            {bootstrap_ci_html}
         </div>
 
         <h3 class="section-title">⚔️ Comparación de Desempeño Taxonómico</h3>

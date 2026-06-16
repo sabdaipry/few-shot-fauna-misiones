@@ -720,3 +720,51 @@ def plot_taxclass_confusion(confusion_dict, backbone_names, output_path):
     fig.tight_layout(rect=[0, 0, 1, 0.92])
 
     _save_figure(output_path, fig=fig)
+
+
+def plot_bootstrap_forest(df_ci, metric='Accuracy', output_path="bootstrap_forest.png"):
+    """
+    Forest plot: punto = media bootstrap, barra de error = IC 95%, para Linear
+    SVM en cada backbone, ordenados de mayor a menor media. Una línea vertical
+    punteada marca la media del mejor backbone como referencia visual para
+    juzgar de un vistazo si los IC de los demás backbones la solapan.
+
+    df_ci: DataFrame con columnas [Embedding Model, Classifier, Metric, Mean,
+           CI_lower, CI_upper, CI_width], salida de scripts/07_bootstrap_ci.py.
+    metric: 'Accuracy' o 'F1_Macro'.
+    """
+    df_plot = df_ci[(df_ci['Metric'] == metric) & (df_ci['Classifier'] == 'Linear SVM')].copy()
+    if df_plot.empty:
+        logger.warning(f"plot_bootstrap_forest: no hay filas para Metric='{metric}', Classifier='Linear SVM'.")
+        return
+
+    # Orden descendente por media, pero invertido para que el mejor quede arriba
+    # en el eje Y (errorbar dibuja de abajo hacia arriba, igual que barh).
+    df_plot = df_plot.sort_values('Mean', ascending=False).iloc[::-1].reset_index(drop=True)
+    y_pos = np.arange(len(df_plot))
+
+    err_lo = df_plot['Mean'] - df_plot['CI_lower']
+    err_hi = df_plot['CI_upper'] - df_plot['Mean']
+
+    plt.figure(figsize=(10, max(6, 0.45 * len(df_plot))))
+    plt.errorbar(
+        df_plot['Mean'], y_pos, xerr=[err_lo, err_hi],
+        fmt='o', color='#1b5e20', ecolor='#1b5e20', elinewidth=2, capsize=4,
+        markersize=8, markerfacecolor='#2ecc71', markeredgecolor='#1b5e20'
+    )
+
+    best_mean = df_plot['Mean'].max()
+    plt.axvline(best_mean, color='#c62828', linestyle='--', linewidth=1.2, alpha=0.7)
+
+    plt.yticks(y_pos, df_plot['Embedding Model'])
+    plt.xlabel(f"{metric.replace('_', ' ')} (IC 95% bootstrap)", fontsize=16)
+    plt.ylabel("")
+    plt.title(
+        f"Bootstrap CI 95% por Backbone ({metric.replace('_', ' ')}, Linear SVM)",
+        fontweight='bold', color='#1b4f25'
+    )
+    plt.grid(axis='x', linestyle='--', alpha=0.5)
+    plt.tick_params(axis='y', labelsize=16)
+    plt.tick_params(axis='x', labelsize=16)
+
+    _save_figure(output_path)

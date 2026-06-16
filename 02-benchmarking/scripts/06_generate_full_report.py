@@ -63,6 +63,19 @@ def main():
         data['incremental'] = pd.read_csv(INCREMENTAL_RESULTS_PATH)
         data['outliers'] = pd.read_csv(OUTLIER_RESULTS_PATH)
 
+        # Bootstrap CI (Fase 7) — opcional: el script 07_bootstrap_ci.py se corre
+        # por separado (no forma parte de este pipeline) y puede no haberse
+        # ejecutado todavía, por lo que se carga con guard.
+        bootstrap_ci_path = BENCHMARK_RESULTS_DIR / "bootstrap_ci.csv"
+        if bootstrap_ci_path.exists():
+            data['bootstrap_ci'] = pd.read_csv(bootstrap_ci_path)
+        else:
+            logger.warning(
+                f"No se encontró {bootstrap_ci_path.name}; se omite la figura de "
+                "bootstrap CI. Corré `python scripts/07_bootstrap_ci.py` antes para incluirla."
+            )
+            data['bootstrap_ci'] = None
+
         # Mapa taxonómico familia → clase (para análisis de errores cross-clase)
         tax_yaml_path = project_root / "data" / "taxonomic_class_mapping.yaml"
         family_to_class = {}
@@ -268,7 +281,14 @@ def main():
             confusion_results, present_top5, FIG_DIR / "09_confusion_matrix_taxclass.png"
         )
 
-    # vii. Generar HTML
+    # vii. Bootstrap CI (Fase 7, opcional)
+    if data.get('bootstrap_ci') is not None:
+        logger.info("Generando figura de bootstrap CI...")
+        viz.plot_bootstrap_forest(
+            data['bootstrap_ci'], metric="Accuracy", output_path=FIG_DIR / "10_bootstrap_forest.png"
+        )
+
+    # viii. Generar HTML
     # 4. HTML Generación
     logger.info("Maquetando HTML Interactivo...")
     
