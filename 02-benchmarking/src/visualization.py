@@ -704,7 +704,7 @@ def plot_taxclass_confusion(confusion_dict, backbone_names, output_path):
                 annot.loc[r, c] = f"{df_cm.loc[r, c]:.1f}%"
 
         sns.heatmap(
-            df_cm, annot=annot, fmt="", cmap="Blues", vmin=0, vmax=100,
+            df_cm, annot=annot, fmt="", cmap="Greens", vmin=0, vmax=100,
             cbar_kws={'label': '% Clase Verdadera'}, annot_kws={'fontsize': 18},
             linewidths=.5, linecolor='white', ax=ax, square=True
         )
