@@ -172,29 +172,47 @@ def measure_latency(
     gallery_embs: np.ndarray,
     dist_fn: Callable,
     warmup: int = WARMUP_ITERS,
-) -> float:
-    """Mide latencia de búsqueda promedio por imagen (ms) con warmup previo.
+    n_samples: int = 200,
+    n_repeats: int = 10,
+    seed: int = 29,
+) -> dict[str, float]:
+    """Mide latencia de búsqueda con muestra estratificada y repeticiones.
+
+    Selecciona n_samples imágenes del query de forma aleatoria (seed fija),
+    las mide n_repeats veces cada una, y retorna media, mediana y p95.
 
     Args:
         query_embs: Embeddings query, shape (N, D).
         gallery_embs: Embeddings gallery, shape (M, D).
-        dist_fn: Función dist(query_1xD, gallery_MxD) -> (1, M).
+        dist_fn: Función dist(query_1xD, gallery_MxD).
         warmup: Iteraciones de calentamiento no medidas.
+        n_samples: Cantidad de imágenes a muestrear para medir latencia.
+        n_repeats: Repeticiones por imagen.
+        seed: Semilla para reproducibilidad.
 
     Returns:
-        Latencia media en ms por imagen query.
+        Dict con claves 'mean_ms', 'median_ms', 'p95_ms'.
     """
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(len(query_embs), size=min(n_samples, len(query_embs)), replace=False)
+    sample = query_embs[idx]
+
     for _ in range(warmup):
         dist_fn(query_embs[:1], gallery_embs)
 
     times_ms = []
-    for i in range(len(query_embs)):
-        q = query_embs[i : i + 1]
-        t0 = time.perf_counter()
-        dist_fn(q, gallery_embs)
-        times_ms.append((time.perf_counter() - t0) * 1000)
+    for q in sample:
+        for _ in range(n_repeats):
+            t0 = time.perf_counter()
+            dist_fn(q[np.newaxis], gallery_embs)
+            times_ms.append((time.perf_counter() - t0) * 1000)
 
-    return float(np.mean(times_ms))
+    times_arr = np.array(times_ms)
+    return {
+        "mean_ms":   float(np.mean(times_arr)),
+        "median_ms": float(np.median(times_arr)),
+        "p95_ms":    float(np.percentile(times_arr, 95)),
+    }
 
 
 def run_1nn_evaluation(
@@ -203,8 +221,8 @@ def run_1nn_evaluation(
     gallery_embs: np.ndarray,
     gallery_labels: np.ndarray,
     dist_fn: Callable,
-) -> tuple[float, float]:
-    """Calcula accuracy 1-NN y latencia media de búsqueda por imagen.
+) -> tuple[float, dict[str, float]]:
+    """Calcula accuracy 1-NN y métricas de latencia de búsqueda por imagen.
 
     Args:
         query_embs: Embeddings query.
@@ -214,13 +232,13 @@ def run_1nn_evaluation(
         dist_fn: Función de distancia.
 
     Returns:
-        (accuracy, latency_ms)
+        (accuracy, latency_dict) con claves 'mean_ms', 'median_ms', 'p95_ms'.
     """
     dist_matrix = dist_fn(query_embs, gallery_embs)
     preds = predict_1nn(dist_matrix, gallery_labels)
     accuracy = float(np.mean(preds == query_labels))
-    latency_ms = measure_latency(query_embs, gallery_embs, dist_fn)
-    return accuracy, latency_ms
+    latency_dict = measure_latency(query_embs, gallery_embs, dist_fn)
+    return accuracy, latency_dict
 
 
 # ---------------------------------------------------------------------------
@@ -296,22 +314,23 @@ def plot_accuracy_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
         for bar, v in zip(bars, vals):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.003,
+                bar.get_height() + 0.003 + v * 0.003,
                 f"{v:.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=12,
+                fontsize=14,
                 fontweight="bold",
                 rotation=90,
             )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, rotation=15, ha="right", fontsize=12)
-    ax.set_ylabel("Accuracy (1-NN)", fontsize=12)
-    ax.set_title("Accuracy 1-NN por backbone y métrica de distancia", fontsize=12)
+    ax.set_xticklabels(metrics, rotation=0, fontsize=16)
+    ax.set_ylabel("Accuracy (1-NN)", fontsize=16)
+    ax.set_title("Accuracy 1-NN por backbone y métrica de distancia",
+                 fontsize=18, fontweight="bold")
     ax.set_ylim(0, 1.05)
-    ax.tick_params(axis="y", labelsize=12)
-    ax.legend(fontsize=12)
+    ax.tick_params(axis="y", labelsize=16)
+    ax.legend(fontsize=13, bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0)
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
 
@@ -329,32 +348,44 @@ def plot_latency_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
     width = 0.15
 
     fig, ax = plt.subplots(figsize=(14, 6))
+
+    all_vals: list[float] = []
+    bar_info: list[tuple] = []
+
     for i, backbone in enumerate(backbones):
         sub = results_df[results_df["backbone"] == backbone].set_index("metric")
-        vals = [sub.loc[m, "latency_ms"] if m in sub.index else np.nan for m in metrics]
+        vals = [sub.loc[m, "median_ms"] if m in sub.index else np.nan for m in metrics]
         offset = (i - (len(backbones) - 1) / 2) * width
         bars = ax.bar(x + offset, vals, width, label=backbone,
                       color=_BACKBONE_COLORS.get(backbone))
         for bar, v in zip(bars, vals):
             if not np.isnan(v):
-                ax.text(
-                    bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() * 1.05,
-                    f"{v:.2f}",
-                    ha="center",
-                    va="bottom",
-                    fontsize=12,
-                    fontweight="bold",
-                    rotation=90,
-                )
+                all_vals.append(v)
+                bar_info.append((bar, v))
 
     ax.set_yscale("log")
+    max_val = max(all_vals) if all_vals else 1.0
+    ax.set_ylim(top=max_val * 3)
+
+    for bar, v in bar_info:
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            v * 1.05 + 0.003,
+            f"{v:.2f}",
+            ha="center",
+            va="bottom",
+            fontsize=14,
+            fontweight="bold",
+            rotation=90,
+        )
+
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, rotation=15, ha="right", fontsize=12)
-    ax.set_ylabel("Latencia media por imagen (ms, escala log)", fontsize=12)
-    ax.set_title("Latencia de búsqueda 1-NN por backbone y métrica", fontsize=12)
-    ax.tick_params(axis="y", labelsize=12)
-    ax.legend(fontsize=12)
+    ax.set_xticklabels(metrics, rotation=0, fontsize=16)
+    ax.set_ylabel("Latencia mediana por imagen (ms, escala log)", fontsize=16)
+    ax.set_title("Latencia de búsqueda 1-NN por backbone y métrica",
+                 fontsize=18, fontweight="bold")
+    ax.tick_params(axis="y", labelsize=16)
+    ax.legend(fontsize=13, bbox_to_anchor=(1.01, 1), loc="upper left", borderaxespad=0)
     ax.grid(axis="y", alpha=0.3, which="both")
     fig.tight_layout()
 
@@ -403,16 +434,23 @@ def plot_distance_distributions(
                     color=COLOR_INTRA, density=True)
             ax.hist(inter_clean, bins=60, alpha=0.6, label="Inter-clase",
                     color=COLOR_INTER, density=True)
-            ax.set_xlabel("Distancia")
-            ax.set_ylabel("Densidad")
-            ax.set_title(f"{metric}  |  Acc={acc:.3f}")
-            ax.legend()
+            ax.set_xlabel("Distancia", fontsize=14)
+            ax.set_ylabel("Densidad", fontsize=14)
+            ax.set_title(f"{metric}  |  Acc={acc:.3f}", fontweight="bold", fontsize=16)
+            ax.tick_params(axis="both", labelsize=14)
             ax.grid(alpha=0.3)
 
         for ax in axes_flat[len(METRICS):]:
             ax.set_visible(False)
 
-        fig.suptitle(backbone, fontsize=14, fontweight="bold")
+        handles, labels = axes_flat[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="upper right", fontsize=13,
+                   bbox_to_anchor=(1.0, 0.98))
+
+        fig.suptitle(
+            f"Distribuciones de distancia intra vs inter-clase — {backbone}",
+            fontsize=18, fontweight="bold",
+        )
         fig.tight_layout()
 
         fname = backbone.replace("/", "_").replace(" ", "_")
@@ -478,11 +516,16 @@ def main() -> None:
             logger.info(f"  Evaluando métrica: {metric}")
             fn = dist_fns[metric]
 
-            accuracy, latency_ms = run_1nn_evaluation(
+            accuracy, latency_dict = run_1nn_evaluation(
                 query_embs, query_labels, gallery_embs, gallery_labels, fn
             )
 
-            logger.info(f"    Accuracy: {accuracy:.4f}  |  Latencia: {latency_ms:.3f} ms/img")
+            logger.info(
+                f"    Accuracy: {accuracy:.4f}  |  "
+                f"mean={latency_dict['mean_ms']:.3f}ms  "
+                f"median={latency_dict['median_ms']:.3f}ms  "
+                f"p95={latency_dict['p95_ms']:.3f}ms"
+            )
 
             logger.info(f"    Calculando distribuciones intra/inter-clase para {metric}...")
             intra, inter = compute_distance_distributions(
@@ -492,11 +535,13 @@ def main() -> None:
 
             records.append(
                 {
-                    "backbone": backbone,
+                    "backbone":     backbone,
                     "backbone_dim": dim,
-                    "metric": metric,
-                    "accuracy": accuracy,
-                    "latency_ms": latency_ms,
+                    "metric":       metric,
+                    "accuracy":     accuracy,
+                    "mean_ms":      latency_dict["mean_ms"],
+                    "median_ms":    latency_dict["median_ms"],
+                    "p95_ms":       latency_dict["p95_ms"],
                 }
             )
 
@@ -532,14 +577,18 @@ def main() -> None:
     logger.info("")
     logger.info("=== RESUMEN — ordenado por accuracy descendente ===")
     summary = results_df.sort_values("accuracy", ascending=False)
-    header = f"{'backbone':<18} {'metric':<22} {'accuracy':>9} {'latency_ms':>12} {'is_best':>8}"
+    header = (
+        f"{'backbone':<18} {'metric':<22} {'accuracy':>9} "
+        f"{'mean_ms':>10} {'median_ms':>11} {'p95_ms':>10} {'is_best':>8}"
+    )
     logger.info(header)
     logger.info("-" * len(header))
     for _, row in summary.iterrows():
         best_flag = " *" if row["is_best"] else ""
         logger.info(
             f"{row['backbone']:<18} {row['metric']:<22} "
-            f"{row['accuracy']:>9.4f} {row['latency_ms']:>11.3f}ms"
+            f"{row['accuracy']:>9.4f} {row['mean_ms']:>9.3f}ms "
+            f"{row['median_ms']:>10.3f}ms {row['p95_ms']:>9.3f}ms"
             f"{best_flag}"
         )
     logger.info("")
