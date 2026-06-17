@@ -1,0 +1,79 @@
+2026-06-16 23:21:49,713 - calibrate_thresholds - INFO - 
+2026-06-16 23:21:49,714 - calibrate_thresholds - INFO - ============================================================
+2026-06-16 23:21:49,714 - calibrate_thresholds - INFO -    CALIBRACIÓN DE UMBRALES — PIPELINE FEW-SHOT FAUNA
+2026-06-16 23:21:49,715 - calibrate_thresholds - INFO - ============================================================
+2026-06-16 23:21:49,758 - calibrate_thresholds - INFO - Índice cargado: 4562 registros desde dataset_index.csv
+2026-06-16 23:21:49,782 - calibrate_thresholds - INFO - Clases incluidas: 82
+2026-06-16 23:21:49,783 - calibrate_thresholds - INFO - Clases excluidas (gallery < 3): 9
+2026-06-16 23:21:49,784 - calibrate_thresholds - WARNING -   EXCLUIDA: Axis axis  (gallery=2, query=8)
+2026-06-16 23:21:49,786 - calibrate_thresholds - WARNING -   EXCLUIDA: Cabassous tatouay  (gallery=2, query=10)
+2026-06-16 23:21:49,786 - calibrate_thresholds - WARNING -   EXCLUIDA: Conopophaga lineata vulgaris  (gallery=2, query=1)
+2026-06-16 23:21:49,787 - calibrate_thresholds - WARNING -   EXCLUIDA: Cryptopezus nattereri  (gallery=2, query=4)
+2026-06-16 23:21:49,788 - calibrate_thresholds - WARNING -   EXCLUIDA: Leopardus pardalis mitis  (gallery=1, query=1)
+2026-06-16 23:21:49,788 - calibrate_thresholds - WARNING -   EXCLUIDA: Puma concolor concolor  (gallery=2, query=3)
+2026-06-16 23:21:49,789 - calibrate_thresholds - WARNING -   EXCLUIDA: Strix virgata borelliana  (gallery=2, query=1)
+2026-06-16 23:21:49,789 - calibrate_thresholds - WARNING -   EXCLUIDA: Sus scrofa domesticus  (gallery=2, query=7)
+2026-06-16 23:21:49,790 - calibrate_thresholds - WARNING -   EXCLUIDA: Tapirus terrestris terrestris  (gallery=2, query=1)
+2026-06-16 23:21:49,797 - calibrate_thresholds - INFO - NPZ cargado: distance_distributions.npz
+2026-06-16 23:21:49,805 - calibrate_thresholds - INFO - Imágenes query incluidas: 3638
+2026-06-16 23:21:49,806 - calibrate_thresholds - INFO - 
+2026-06-16 23:21:49,806 - calibrate_thresholds - INFO - --- UMBRAL 1: DINOv2 Small (coseno) ---
+2026-06-16 23:22:53,619 - calibrate_thresholds - INFO -   Gallery: (888, 384)  |  Query: (3674, 384)
+2026-06-16 23:22:53,619 - calibrate_thresholds - INFO -   Computando d_min intra-clase (1-NN)...
+2026-06-16 23:22:53,835 - calibrate_thresholds - INFO -   Computando d_min inter-clase...
+2026-06-16 23:22:54,151 - calibrate_thresholds - INFO -   Percentiles globales Umbral 1:
+2026-06-16 23:22:54,152 - calibrate_thresholds - INFO -     p90: threshold=0.5464  coverage=0.8999  inter_contam=0.8315  gap=-0.0884
+2026-06-16 23:22:54,152 - calibrate_thresholds - INFO -     p95: threshold=0.6165  coverage=0.9500  inter_contam=0.9442  gap=-0.1584
+2026-06-16 23:22:54,152 - calibrate_thresholds - INFO -     p97: threshold=0.6704  coverage=0.9698  inter_contam=0.9725  gap=-0.2123
+2026-06-16 23:22:54,152 - calibrate_thresholds - INFO -     p99: threshold=0.7594  coverage=0.9898  inter_contam=0.9940  gap=-0.3013
+2026-06-16 23:22:54,152 - calibrate_thresholds - INFO -   Generando figuras Umbral 1...
+2026-06-16 23:22:55,140 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/01_intra_inter_distribution.{svg,png}
+2026-06-16 23:22:56,113 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/02_percentile_candidates_stats.{svg,png}
+2026-06-16 23:22:58,149 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/03_per_class_coverage.{svg,png}
+2026-06-16 23:23:00,803 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/04_per_class_dmin_boxplots.{svg,png}
+2026-06-16 23:23:00,803 - calibrate_thresholds - INFO - 
+2026-06-16 23:23:00,803 - calibrate_thresholds - INFO - --- UMBRAL 2: BioCLIP v2 (coseno) ---
+2026-06-16 23:24:04,518 - calibrate_thresholds - INFO -   Gallery: (888, 768)  |  Query: (3674, 768)
+2026-06-16 23:24:04,518 - calibrate_thresholds - INFO -   Computando d_min intra-clase variante 1-NN...
+2026-06-16 23:24:04,810 - calibrate_thresholds - INFO -   Computando d_min inter-clase...
+2026-06-16 23:24:05,103 - calibrate_thresholds - INFO -   Computando centroides de gallery...
+2026-06-16 23:24:05,119 - calibrate_thresholds - INFO -   Centroides calculados para 91 especies.
+2026-06-16 23:24:05,119 - calibrate_thresholds - INFO -   Computando d_min intra-clase variante centroide...
+2026-06-16 23:24:05,341 - calibrate_thresholds - INFO -   Percentiles globales Umbral 2 — variante 1-NN:
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p90: threshold=0.1646  coverage=0.8999  inter_contam=0.4335  gap=0.0107
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p95: threshold=0.1923  coverage=0.9500  inter_contam=0.6006  gap=-0.0170
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p97: threshold=0.2130  coverage=0.9698  inter_contam=0.7106  gap=-0.0377
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p99: threshold=0.2491  coverage=0.9898  inter_contam=0.9043  gap=-0.0737
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -   Percentiles globales Umbral 2 — variante centroide:
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p90: threshold=0.1556  coverage=0.8999  inter_contam=0.3818  gap=0.0198
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p95: threshold=0.1866  coverage=0.9500  inter_contam=0.5665  gap=-0.0113
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p97: threshold=0.2063  coverage=0.9698  inter_contam=0.6751  gap=-0.0310
+2026-06-16 23:24:05,342 - calibrate_thresholds - INFO -     p99: threshold=0.2551  coverage=0.9898  inter_contam=0.9225  gap=-0.0798
+2026-06-16 23:24:05,343 - calibrate_thresholds - INFO -   Generando figuras Umbral 2...
+2026-06-16 23:24:06,188 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/01_intra_inter_distribution.{svg,png}
+2026-06-16 23:24:07,144 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/02_percentile_candidates_stats_1nn.{svg,png}
+2026-06-16 23:24:08,234 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/02_percentile_candidates_stats_centroid.{svg,png}
+2026-06-16 23:24:10,272 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/03_per_class_coverage.{svg,png}
+2026-06-16 23:24:12,943 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/04_per_class_dmin_boxplots.{svg,png}
+2026-06-16 23:24:14,398 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/05_1nn_vs_centroid_comparison.{svg,png}
+2026-06-16 23:24:14,405 - calibrate_thresholds - INFO - 
+thresholds.json guardado: C:\Users\Win 10\Desktop\CEIA\CEIA\TF\few-shot-fauna-misiones\03-threshold-optimization\data\thresholds.json
+2026-06-16 23:24:14,405 - calibrate_thresholds - INFO - 
+2026-06-16 23:24:14,405 - calibrate_thresholds - INFO - === RESUMEN DE CALIBRACIÓN ===
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral       Variante            Percentil    Threshold   Coverage     Inter%        Gap
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - ----------------------------------------------------------------------------------------
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 1     1-NN                      p90       0.5464     0.8999     0.8315    -0.0884
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 1     1-NN                      p95       0.6165     0.9500     0.9442    -0.1584
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 1     1-NN                      p97       0.6704     0.9698     0.9725    -0.2123
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 1     1-NN                      p99       0.7594     0.9898     0.9940    -0.3013
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - 
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 2     1-NN                      p90       0.1646     0.8999     0.4335     0.0107
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 2     1-NN                      p95       0.1923     0.9500     0.6006    -0.0170
+2026-06-16 23:24:14,406 - calibrate_thresholds - INFO - Umbral 2     1-NN                      p97       0.2130     0.9698     0.7106    -0.0377
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - Umbral 2     1-NN                      p99       0.2491     0.9898     0.9043    -0.0737
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - Umbral 2     Centroide                 p90       0.1556     0.8999     0.3818     0.0198
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - Umbral 2     Centroide                 p95       0.1866     0.9500     0.5665    -0.0113
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - Umbral 2     Centroide                 p97       0.2063     0.9698     0.6751    -0.0310
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - Umbral 2     Centroide                 p99       0.2551     0.9898     0.9225    -0.0798
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - 
+2026-06-16 23:24:14,407 - calibrate_thresholds - INFO - CALIBRACIÓN COMPLETADA
