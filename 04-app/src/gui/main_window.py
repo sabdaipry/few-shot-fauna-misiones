@@ -40,6 +40,7 @@ from .styles import (
     tab_button_qss,
     title_qss,
 )
+from .tabs.analisis_tab import AnalisisTab
 
 _ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 
@@ -279,8 +280,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(scroll)
 
         # Páginas de cada pestaña
+        self._stack.addWidget(AnalisisTab())
         for title, breadcrumb, subtitle in zip(
-            _TAB_LABELS, _TAB_BREADCRUMBS, _TAB_SUBTITLES
+            _TAB_LABELS[1:], _TAB_BREADCRUMBS[1:], _TAB_SUBTITLES[1:]
         ):
             self._stack.addWidget(
                 _PlaceholderTab(title, breadcrumb, subtitle)
