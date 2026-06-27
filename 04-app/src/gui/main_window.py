@@ -7,9 +7,9 @@ Estructura:
            └── QVBoxLayout
                 ├── _NavBar     (fijo, 64 px)
                 └── QScrollArea → QStackedWidget
-                     ├── _PlaceholderTab  "Operación"
-                     ├── _PlaceholderTab  "Detalles"
-                     └── _PlaceholderTab  "Métricas"
+                     ├── _PlaceholderTab  "Análisis"
+                     ├── _PlaceholderTab  "Registros"
+                     └── _PlaceholderTab  "Evaluación"
 """
 
 from pathlib import Path
@@ -44,9 +44,9 @@ from .styles import (
 
 _ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 
-_TAB_LABELS = ["Operación", "Detalles", "Métricas"]
+_TAB_LABELS = ["Análisis", "Registros", "Evaluación"]
 _TAB_BREADCRUMBS = [
-    "SAREKO / OPERACIÓN",
+    "SAREKO / ANÁLISIS",
     "SAREKO / DETALLE OPERATIVO",
     "SAREKO / ANALYTICS",
 ]
