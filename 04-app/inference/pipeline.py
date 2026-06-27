@@ -202,6 +202,23 @@ class BioCLIPEmbedder:
             emb_np = emb_np / norm
         return emb_np
 
+    def embed_batch(self, pil_images: list[Image.Image]) -> np.ndarray:
+        """
+        Recibe una lista de PIL.Image y devuelve embeddings L2-normalizados.
+
+        Una única pasada forward del modelo procesa todas las imágenes del batch.
+
+        Returns:
+            np.ndarray shape (batch_size, 768) float32, cada fila normalizada.
+        """
+        batch = torch.stack([self._preprocess(img) for img in pil_images])
+        with torch.no_grad():
+            embs = self._model.encode_image(batch)
+        embs_np = embs.cpu().numpy().astype(np.float32)
+        norms   = np.linalg.norm(embs_np, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return embs_np / norms
+
 
 # ===========================================================================
 # SpeciesClassifier
@@ -337,13 +354,15 @@ class VideoProcessor:
         N: int = 30,
         K: int = 10,
         M: int = 6,
+        batch_size: int = 8,
     ) -> None:
         self._embedder   = embedder
         self._classifier = classifier
         self._catalog    = classifier._catalog
-        self.N = N
-        self.K = K
-        self.M = M
+        self.N          = N
+        self.K          = K
+        self.M          = M
+        self.batch_size = batch_size
 
     def process(
         self,
@@ -371,9 +390,29 @@ class VideoProcessor:
         est_sampled   = max(1, math.ceil(total_frames / self.N))
 
         frame_predictions: list[dict] = []
-        frame_idx = 0
+        batch_imgs:        list[Image.Image] = []
+        batch_meta:        list[dict]        = []
         processed = 0
 
+        def _flush() -> None:
+            nonlocal processed
+            if not batch_imgs:
+                return
+            embs = self._embedder.embed_batch(batch_imgs)
+            for i, meta in enumerate(batch_meta):
+                result = self._classifier.classify(embs[i])
+                frame_predictions.append({
+                    "frame_idx": meta["frame_idx"],
+                    "timestamp": meta["timestamp"],
+                    "result":    result,
+                })
+                processed += 1
+                if progress_callback:
+                    progress_callback(processed, est_sampled)
+            batch_imgs.clear()
+            batch_meta.clear()
+
+        frame_idx = 0
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -382,20 +421,15 @@ class VideoProcessor:
             if frame_idx % self.N == 0:
                 timestamp = frame_idx / fps
                 pil_img   = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                result    = self._classifier.classify(
-                    self._embedder.embed_image(pil_img)
-                )
-                frame_predictions.append({
-                    "frame_idx": frame_idx,
-                    "timestamp": timestamp,
-                    "result":    result,
-                })
-                processed += 1
-                if progress_callback:
-                    progress_callback(processed, est_sampled)
+                batch_imgs.append(pil_img)
+                batch_meta.append({"frame_idx": frame_idx, "timestamp": timestamp})
+
+                if len(batch_imgs) >= self.batch_size:
+                    _flush()
 
             frame_idx += 1
 
+        _flush()
         cap.release()
         return self._build_events(frame_predictions)
 
