@@ -1131,6 +1131,8 @@ class _BatchCard(QFrame):
 class AnalisisTab(QWidget):
     """Pestaña Análisis completa."""
 
+    events_ready = Signal(str, list, str)  # (filename, events, filepath_str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -1211,6 +1213,9 @@ class AnalisisTab(QWidget):
         self._total_frames += 1
         self._hero.set_especies(len(self._species_seen))
         self._hero.set_frames(self._total_frames)
+        matching = [f for f in self._carga.selected_files if f.name == name]
+        fp_str = str(matching[0]) if matching else ""
+        self.events_ready.emit(name, events, fp_str)
 
     def _on_error(self, filename: str, msg: str) -> None:
         self._batch.on_file_error(filename, msg)

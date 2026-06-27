@@ -41,6 +41,7 @@ from .styles import (
     title_qss,
 )
 from .tabs.analisis_tab import AnalisisTab
+from .tabs.validacion_tab import ValidacionTab
 
 _ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 
@@ -280,13 +281,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(scroll)
 
         # Páginas de cada pestaña
-        self._stack.addWidget(AnalisisTab())
-        for title, breadcrumb, subtitle in zip(
-            _TAB_LABELS[1:], _TAB_BREADCRUMBS[1:], _TAB_SUBTITLES[1:]
-        ):
-            self._stack.addWidget(
-                _PlaceholderTab(title, breadcrumb, subtitle)
-            )
+        self._analisis_tab   = AnalisisTab()
+        self._validacion_tab = ValidacionTab()
+
+        self._stack.addWidget(self._analisis_tab)
+        self._stack.addWidget(self._validacion_tab)
+
+        # Pestaña Evaluación — placeholder hasta la próxima sesión
+        self._stack.addWidget(
+            _PlaceholderTab(_TAB_LABELS[2], _TAB_BREADCRUMBS[2], _TAB_SUBTITLES[2])
+        )
 
         # Conectar navbar → stack
         self._navbar.tab_selected.connect(self._stack.setCurrentIndex)
+
+        # Propagar eventos completados de Análisis → Validación
+        self._analisis_tab.events_ready.connect(self._on_events_ready)
+
+    # ------------------------------------------------------------------
+
+    def _on_events_ready(self, filename: str, events: list, filepath_str: str) -> None:
+        fp = Path(filepath_str) if filepath_str else None
+        self._validacion_tab.add_events(filename, events, fp)

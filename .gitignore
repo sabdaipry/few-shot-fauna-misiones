@@ -84,3 +84,5 @@ Thumbs.db
 
 04-app/data/*.pkl 
  
+# ── Clips recortados por la app (generados en tiempo de ejecución) ────
+04-app/SAREKO_clips/
