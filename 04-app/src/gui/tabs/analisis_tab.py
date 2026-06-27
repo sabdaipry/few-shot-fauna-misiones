@@ -5,23 +5,28 @@ Estructura:
     AnalisisTab
       ├── _HeroCard              — breadcrumb, título, 5 métricas rápidas
       ├── _CargaCard             — selector de archivos, modo, botón Procesar
-      └── _SeguimientoCard       — métricas RT, barra progreso, log de etapas
+      ├── _SeguimientoCard       — métricas RT, barra progreso, log de etapas
+      └── _BatchCard             — tabla de lote con panel de detalle expandible
 """
 
+import csv
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -94,6 +99,12 @@ def _progress_bar(height: int = 8) -> QProgressBar:
         }}
     """)
     return pb
+
+
+def _fmt_time(sec: float) -> str:
+    """Formatea segundos a 'M:SS'."""
+    s = max(0, int(sec))
+    return f"{s // 60}:{s % 60:02d}"
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +566,565 @@ class _SeguimientoCard(QFrame):
 
 
 # ---------------------------------------------------------------------------
+# Panel de detalle expandible (no modal)
+# ---------------------------------------------------------------------------
+
+class _DetailPanel(QFrame):
+    """Muestra info de un archivo al hacer click en 'Ver detalles'."""
+
+    closed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("detailpanel")
+        self.setStyleSheet("""
+            QFrame#detailpanel {
+                background: rgba(0,0,0,140);
+                border: 1px solid rgba(153,225,122,60);
+                border-radius: 10px;
+            }
+        """)
+        self.hide()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setSpacing(10)
+
+        # Fila de título + botón cerrar
+        hrow = QHBoxLayout()
+        self._title = QLabel()
+        self._title.setStyleSheet(section_label_qss())
+        btn_close = QPushButton("✕")
+        btn_close.setFixedSize(22, 22)
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: rgba(237,239,236,100);
+                border: none;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ color: {TEXT_PRIMARY}; }}
+        """)
+        btn_close.clicked.connect(self._on_close)
+        hrow.addWidget(self._title)
+        hrow.addStretch()
+        hrow.addWidget(btn_close)
+        layout.addLayout(hrow)
+
+        # Grid de contenido dinámico
+        self._grid = QGridLayout()
+        self._grid.setContentsMargins(0, 4, 0, 0)
+        self._grid.setSpacing(8)
+        self._grid.setColumnStretch(1, 1)
+        layout.addLayout(self._grid)
+
+    def _on_close(self) -> None:
+        self.hide()
+        self.closed.emit()
+
+    def _clear(self) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+    def _add_row(self, r: int, label: str, value: str, italic: bool = False) -> None:
+        lbl = QLabel(label)
+        lbl.setStyleSheet(section_label_qss())
+        val = QLabel(value)
+        val.setWordWrap(True)
+        val.setStyleSheet(
+            f"color: rgba(237,239,236,216); font-size: 13px; background: transparent;"
+            + (" font-style: italic;" if italic else "")
+        )
+        self._grid.addWidget(lbl, r, 0)
+        self._grid.addWidget(val, r, 1)
+
+    def show_error(self, name: str, stage: str, msg: str, pct: int) -> None:
+        self._clear()
+        self._title.setText("DETALLE DEL ERROR")
+        self._add_row(0, "ARCHIVO",             name)
+        self._add_row(1, "ETAPA",               stage)
+        self._add_row(2, "ERROR",               msg)
+        self._add_row(3, "PROGRESO AL FALLAR",  f"{pct} %")
+        self.show()
+
+    def show_completed(self, name: str, events: list) -> None:
+        self._clear()
+        self._title.setText("DETALLE DE LA CORRIDA")
+
+        species: set[str] = set()
+        n_alta = n_baja = 0
+        dists: list[float] = []
+        for ev in events:
+            sp = getattr(ev, "species", "")
+            if sp:
+                species.add(sp)
+            if getattr(ev, "confidence_level", "") == "alta":
+                n_alta += 1
+            else:
+                n_baja += 1
+            d = getattr(ev, "cosine_distance", None)
+            if d is not None:
+                dists.append(float(d))
+
+        sp_str   = ", ".join(sorted(species)) if species else "—"
+        conf_str = f"{n_alta} alta / {n_baja} baja"
+        avg_str  = f"{sum(dists) / len(dists):.4f}" if dists else "—"
+
+        self._add_row(0, "ARCHIVO",                 name)
+        self._add_row(1, "ESPECIES ENCONTRADAS",    sp_str, italic=True)
+        self._add_row(2, "EVENTOS DETECTADOS",      str(len(events)))
+        self._add_row(3, "CONFIANZA (alta / baja)", conf_str)
+        self._add_row(4, "DISTANCIA COSENO PROM.",  avg_str)
+        self.show()
+
+
+# ---------------------------------------------------------------------------
+# Card Batch — tabla de resumen del lote
+# ---------------------------------------------------------------------------
+
+class _BatchCard(QFrame):
+    """Card de ancho completo con tabla de lote y panel de detalle expandible."""
+
+    resume_requested = Signal(str)  # nombre del archivo a reanudar
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("batchcard")
+        self.setStyleSheet(card_qss("batchcard"))
+
+        self._rows: dict[str, dict] = {}   # name → dict con widgets y estado
+        self._current_file:  str = ""      # archivo en procesamiento activo
+        self._current_stage: str = ""      # última etapa recibida por señal
+        self._detail_target: str = ""      # archivo cuyo detalle está abierto
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(14)
+
+        # ── Header ──────────────────────────────────────────────────────
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+
+        sec = QLabel("BATCH OPERATIVO")
+        sec.setStyleSheet(section_label_qss())
+        header.addWidget(sec)
+        header.addStretch()
+
+        self._btn_csv  = self._mk_export_btn("Exportar CSV")
+        self._btn_xlsx = self._mk_export_btn("Exportar XLSX")
+        self._btn_csv.setEnabled(False)
+        self._btn_xlsx.setEnabled(False)
+        self._btn_csv.clicked.connect(self._export_csv)
+        self._btn_xlsx.clicked.connect(self._export_xlsx)
+        header.addWidget(self._btn_csv)
+        header.addSpacing(6)
+        header.addWidget(self._btn_xlsx)
+        layout.addLayout(header)
+        layout.addWidget(_sep())
+
+        # ── Tabla ────────────────────────────────────────────────────────
+        self._table = QTableWidget(0, 6)
+        self._table.setHorizontalHeaderLabels(
+            ["ARCHIVO", "ESTADO", "PROGRESO", "ESPECIES", "DETALLE", "ACCIONES"]
+        )
+        hh = self._table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(1, 110)
+        self._table.setColumnWidth(2, 150)
+        self._table.setColumnWidth(3, 80)
+        self._table.setColumnWidth(5, 200)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._table.setCornerButtonEnabled(False)
+        self._table.setStyleSheet(self._table_qss())
+        self._table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._table.setMinimumHeight(100)
+        layout.addWidget(self._table, 1)
+
+        # ── Panel de detalle ─────────────────────────────────────────────
+        self._detail = _DetailPanel()
+        self._detail.closed.connect(self._on_detail_closed)
+        layout.addWidget(self._detail)
+
+    # ── Constructores de widgets de celda ────────────────────────────────
+
+    def _mk_export_btn(self, label: str) -> QPushButton:
+        btn = QPushButton(label)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFixedHeight(28)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(153,225,122,20);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,80);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 12px;
+            }}
+            QPushButton:hover  {{ background: rgba(153,225,122,40); }}
+            QPushButton:disabled {{
+                background: rgba(74,82,72,30);
+                color: rgba(237,239,236,60);
+                border-color: rgba(74,82,72,60);
+            }}
+        """)
+        return btn
+
+    def _table_qss(self) -> str:
+        return f"""
+            QTableWidget {{
+                background: transparent;
+                border: none;
+                outline: none;
+                color: {TEXT_PRIMARY};
+                font-size: 13px;
+            }}
+            QTableWidget::item {{
+                padding: 6px 10px;
+                border-bottom: 1px solid rgba(255,255,255,15);
+                background: transparent;
+            }}
+            QTableWidget::item:hover    {{ background: rgba(153,225,122,12); }}
+            QTableWidget::item:selected {{ background: rgba(31,44,29,160); }}
+            QHeaderView::section {{
+                background: transparent;
+                color: {ACCENT};
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1px;
+                border: none;
+                border-bottom: 1px solid rgba(153,225,122,89);
+                padding: 4px 10px;
+            }}
+            QScrollBar:vertical {{
+                background: rgba(255,255,255,15);
+                width: 6px;
+                margin: 0;
+                border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(153,225,122,100);
+                border-radius: 3px;
+                min-height: 20px;
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{ height: 0; }}
+        """
+
+    def _mk_badge_cell(self, state: str) -> tuple[QWidget, QLabel]:
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        hl = QHBoxLayout(container)
+        hl.setContentsMargins(8, 4, 8, 4)
+        hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl = QLabel(state)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setFixedHeight(22)
+        lbl.setStyleSheet(badge_qss(_BADGE_COLORS.get(state, NEUTRAL)))
+        hl.addWidget(lbl)
+        return container, lbl
+
+    def _mk_progress_cell(self) -> tuple[QWidget, QProgressBar, QLabel]:
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        hl = QHBoxLayout(w)
+        hl.setContentsMargins(8, 0, 8, 0)
+        hl.setSpacing(6)
+        pb = _progress_bar(6)
+        pct_lbl = QLabel("0 %")
+        pct_lbl.setFixedWidth(32)
+        pct_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        pct_lbl.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 11px; background: transparent;"
+        )
+        hl.addWidget(pb, 1)
+        hl.addWidget(pct_lbl)
+        return w, pb, pct_lbl
+
+    def _mk_actions_cell(self, name: str) -> tuple[QWidget, QPushButton]:
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        hl = QHBoxLayout(w)
+        hl.setContentsMargins(4, 2, 4, 2)
+        hl.setSpacing(6)
+
+        btn_ver = QPushButton("Ver detalles")
+        btn_ver.setFixedHeight(26)
+        btn_ver.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_ver.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(153,225,122,20);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,80);
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{ background: rgba(153,225,122,40); }}
+        """)
+        btn_ver.clicked.connect(lambda: self._toggle_detail(name))
+
+        btn_resume = QPushButton("Reanudar")
+        btn_resume.setFixedHeight(26)
+        btn_resume.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_resume.setVisible(False)
+        btn_resume.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(224,92,92,25);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(224,92,92,100);
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{ background: rgba(224,92,92,50); }}
+        """)
+        btn_resume.clicked.connect(lambda: self.resume_requested.emit(name))
+
+        hl.addWidget(btn_ver)
+        hl.addWidget(btn_resume)
+        hl.addStretch()
+        return w, btn_resume
+
+    # ── API pública ──────────────────────────────────────────────────────
+
+    def populate(self, files: list) -> None:
+        """Inicializa la tabla con todos los archivos en estado 'en cola'."""
+        self._rows.clear()
+        self._current_file  = ""
+        self._current_stage = ""
+        self._detail_target = ""
+        self._detail.hide()
+        self._table.setRowCount(0)
+        self._btn_csv.setEnabled(False)
+        self._btn_xlsx.setEnabled(False)
+
+        for file_path in files:
+            name = file_path.name if hasattr(file_path, "name") else str(file_path)
+            r = self._table.rowCount()
+            self._table.insertRow(r)
+            self._table.setRowHeight(r, 44)
+
+            # Col 0 — Archivo
+            self._table.setItem(r, 0, QTableWidgetItem(name))
+
+            # Col 1 — Estado
+            badge_w, badge_lbl = self._mk_badge_cell("en cola")
+            self._table.setCellWidget(r, 1, badge_w)
+
+            # Col 2 — Progreso
+            prog_w, prog_bar, prog_lbl = self._mk_progress_cell()
+            self._table.setCellWidget(r, 2, prog_w)
+
+            # Col 3 — Especies
+            it3 = QTableWidgetItem("—")
+            it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(r, 3, it3)
+
+            # Col 4 — Detalle
+            self._table.setItem(r, 4, QTableWidgetItem("—"))
+
+            # Col 5 — Acciones
+            act_w, btn_resume = self._mk_actions_cell(name)
+            self._table.setCellWidget(r, 5, act_w)
+
+            self._rows[name] = {
+                "row_idx":     r,
+                "badge_lbl":   badge_lbl,
+                "prog_bar":    prog_bar,
+                "prog_lbl":    prog_lbl,
+                "btn_resume":  btn_resume,
+                "state":       "en cola",
+                "pct":         0,
+                "events":      [],
+                "error_msg":   "",
+                "error_stage": "",
+                "path":        file_path,
+            }
+
+    def on_file_started(self, name: str) -> None:
+        self._current_file = name
+        if name not in self._rows:
+            return
+        row = self._rows[name]
+        row["state"] = "procesando"
+        row["pct"]   = 0
+        self._update_badge(name, "procesando")
+        self._update_progress(name, 0)
+
+    def on_stage_updated(self, stage: str, pct: int) -> None:
+        self._current_stage = stage
+        if not self._current_file or self._current_file not in self._rows:
+            return
+        # La etapa de embeddings es la más larga; usarla como proxy del progreso por archivo
+        if "embeddings" in stage.lower():
+            self._update_progress(self._current_file, pct)
+            self._rows[self._current_file]["pct"] = pct
+
+    def on_file_completed(self, name: str, events: list) -> None:
+        if name not in self._rows:
+            return
+        row = self._rows[name]
+        row["state"]  = "completado"
+        row["events"] = events
+        row["pct"]    = 100
+        self._update_badge(name, "completado")
+        self._update_progress(name, 100)
+
+        # Columna Especies: cuenta de especies únicas
+        species = sorted({
+            getattr(ev, "species", "")
+            for ev in events if getattr(ev, "species", "")
+        })
+        self._table.item(row["row_idx"], 3).setText(
+            str(len(species)) if species else "—"
+        )
+
+        # Columna Detalle: rangos de tiempo (BiologicalEvent) o descripción breve
+        intervals = [
+            f"{_fmt_time(ev.start_time)}–{_fmt_time(ev.end_time)}"
+            for ev in events if hasattr(ev, "start_time")
+        ]
+        det = (
+            ", ".join(intervals) if intervals
+            else ("1 imagen procesada" if events else "sin detecciones")
+        )
+        self._table.item(row["row_idx"], 4).setText(det)
+
+        self._check_export()
+        if self._detail_target == name:
+            self._detail.show_completed(name, events)
+
+    def on_file_error(self, name: str, msg: str) -> None:
+        if name not in self._rows:
+            return
+        row = self._rows[name]
+        row["state"]       = "error"
+        row["error_msg"]   = msg
+        row["error_stage"] = self._current_stage or "desconocida"
+        self._update_badge(name, "error")
+        row["btn_resume"].setVisible(True)
+        self._table.item(row["row_idx"], 4).setText(f"Error: {msg[:60]}")
+        if self._detail_target == name:
+            self._detail.show_error(name, row["error_stage"], msg, row["pct"])
+
+    # ── Slots internos ───────────────────────────────────────────────────
+
+    def _on_detail_closed(self) -> None:
+        self._detail_target = ""
+
+    def _toggle_detail(self, name: str) -> None:
+        if self._detail_target == name and self._detail.isVisible():
+            self._detail.hide()
+            self._detail_target = ""
+            return
+        self._detail_target = name
+        row = self._rows.get(name)
+        if not row:
+            return
+        if row["state"] == "completado":
+            self._detail.show_completed(name, row["events"])
+        elif row["state"] == "error":
+            self._detail.show_error(
+                name, row["error_stage"], row["error_msg"], row["pct"]
+            )
+
+    def _update_badge(self, name: str, state: str) -> None:
+        lbl = self._rows[name]["badge_lbl"]
+        lbl.setText(state)
+        lbl.setStyleSheet(badge_qss(_BADGE_COLORS.get(state, NEUTRAL)))
+
+    def _update_progress(self, name: str, pct: int) -> None:
+        row = self._rows[name]
+        row["prog_bar"].setValue(pct)
+        row["prog_lbl"].setText(f"{pct} %")
+
+    def _check_export(self) -> None:
+        has = any(r["state"] == "completado" and r["events"] for r in self._rows.values())
+        self._btn_csv.setEnabled(has)
+        self._btn_xlsx.setEnabled(has)
+
+    # ── Exportación ──────────────────────────────────────────────────────
+
+    def _collect_export_rows(self) -> list[dict]:
+        out: list[dict] = []
+        for name, row in self._rows.items():
+            if row["state"] != "completado":
+                continue
+            for ev in row["events"]:
+                sp   = getattr(ev, "species",            "—")
+                cn   = getattr(ev, "nombre_comun_es_ar", "—")
+                conf = getattr(ev, "confidence_level",   "—")
+                dist = getattr(ev, "cosine_distance",    "—")
+                ivl  = (
+                    f"{_fmt_time(ev.start_time)} – {_fmt_time(ev.end_time)}"
+                    if hasattr(ev, "start_time") else "—"
+                )
+                out.append({
+                    "archivo":          name,
+                    "intervalo":        ivl,
+                    "especie":          sp,
+                    "nombre_comun":     cn,
+                    "confianza":        conf,
+                    "distancia_coseno": dist,
+                })
+        return out
+
+    def _export_csv(self) -> None:
+        rows = self._collect_export_rows()
+        if not rows:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar CSV", "sareko_resultados.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _export_xlsx(self) -> None:
+        rows = self._collect_export_rows()
+        if not rows:
+            return
+        try:
+            import openpyxl
+        except ImportError:
+            # openpyxl no disponible — fallback a CSV
+            self._export_csv()
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar XLSX", "sareko_resultados.xlsx", "Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Resultados SAREKO"
+        ws.append(list(rows[0].keys()))
+        for row in rows:
+            ws.append([str(v) for v in row.values()])
+        wb.save(path)
+
+
+# ---------------------------------------------------------------------------
 # Pestaña principal
 # ---------------------------------------------------------------------------
 
@@ -588,10 +1158,15 @@ class AnalisisTab(QWidget):
         mid_row.addWidget(self._seg,   1)
         outer.addLayout(mid_row)
 
+        # Tabla de lote — ancho completo
+        self._batch = _BatchCard()
+        outer.addWidget(self._batch)
+
         outer.addStretch()
 
-        # Conectar botón Procesar
+        # Señales
         self._carga.btn_procesar.clicked.connect(self._start_processing)
+        self._batch.resume_requested.connect(self._on_resume_requested)
 
     # ------------------------------------------------------------------
     # Procesamiento
@@ -607,11 +1182,15 @@ class AnalisisTab(QWidget):
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
 
+        # Poblar tabla con todos los archivos en "en cola"
+        self._batch.populate(files)
+
         N = self._carga.mode_N
         self._worker = ProcessingWorker(files, N=N, K=10, M=6, batch_size=8)
 
         self._worker.progress_updated.connect(self._seg.update_progress)
         self._worker.stage_updated.connect(self._seg.update_stage)
+        self._worker.stage_updated.connect(self._batch.on_stage_updated)
         self._worker.metrics_updated.connect(self._seg.update_metrics)
         self._worker.file_started.connect(self._on_file_started)
         self._worker.file_completed.connect(self._on_file_completed)
@@ -621,9 +1200,10 @@ class AnalisisTab(QWidget):
         self._worker.start()
 
     def _on_file_started(self, name: str) -> None:
-        pass  # métricas se actualizan vía metrics_updated
+        self._batch.on_file_started(name)
 
     def _on_file_completed(self, name: str, events: list) -> None:
+        self._batch.on_file_completed(name, events)
         for ev in events:
             sp = getattr(ev, "species", None)
             if sp:
@@ -633,6 +1213,7 @@ class AnalisisTab(QWidget):
         self._hero.set_frames(self._total_frames)
 
     def _on_error(self, filename: str, msg: str) -> None:
+        self._batch.on_file_error(filename, msg)
         self._hero.set_active("error")
 
     def _on_finished(self) -> None:
@@ -640,3 +1221,29 @@ class AnalisisTab(QWidget):
         self._carga.set_processing(False)
         self._seg.update_progress(100)
         self._worker = None
+
+    def _on_resume_requested(self, name: str) -> None:
+        """Reintenta procesar un archivo que falló."""
+        if self._worker is not None:
+            return  # hay un worker activo — no interrumpir
+        matching = [f for f in self._carga.selected_files if f.name == name]
+        if not matching:
+            return
+
+        self._seg.reset()
+        self._hero.set_active("procesando")
+        self._carga.set_processing(True)
+
+        N = self._carga.mode_N
+        self._worker = ProcessingWorker(matching, N=N, K=10, M=6, batch_size=8)
+
+        self._worker.progress_updated.connect(self._seg.update_progress)
+        self._worker.stage_updated.connect(self._seg.update_stage)
+        self._worker.stage_updated.connect(self._batch.on_stage_updated)
+        self._worker.metrics_updated.connect(self._seg.update_metrics)
+        self._worker.file_started.connect(self._on_file_started)
+        self._worker.file_completed.connect(self._on_file_completed)
+        self._worker.error_occurred.connect(self._on_error)
+        self._worker.finished.connect(self._on_finished)
+
+        self._worker.start()

@@ -8,7 +8,7 @@ Estructura:
                 ├── _NavBar     (fijo, 64 px)
                 └── QScrollArea → QStackedWidget
                      ├── _PlaceholderTab  "Análisis"
-                     ├── _PlaceholderTab  "Registros"
+                     ├── _PlaceholderTab  "Validación"
                      └── _PlaceholderTab  "Evaluación"
 """
 
@@ -44,7 +44,7 @@ from .tabs.analisis_tab import AnalisisTab
 
 _ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 
-_TAB_LABELS = ["Análisis", "Registros", "Evaluación"]
+_TAB_LABELS = ["Análisis", "Validación", "Evaluación"]
 _TAB_BREADCRUMBS = [
     "SAREKO / ANÁLISIS",
     "SAREKO / DETALLE OPERATIVO",
