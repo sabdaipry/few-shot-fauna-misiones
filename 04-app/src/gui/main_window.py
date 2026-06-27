@@ -32,7 +32,6 @@ from PySide6.QtWidgets import (
 
 from .styles import (
     ACCENT,
-    NAVBAR_QSS,
     SCROLL_TRANSPARENT_QSS,
     TEXT_PRIMARY,
     body_qss,
@@ -96,10 +95,19 @@ class _NavBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("navbar")
-        self.setFixedHeight(64)
-        self.setStyleSheet(NAVBAR_QSS)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setStyleSheet("background: transparent;")
+        self.setFixedHeight(84)  # 64 card + 10 margen arriba + 10 margen abajo
 
-        layout = QHBoxLayout(self)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(10, 10, 10, 10)
+        outer.setSpacing(0)
+
+        card = QFrame()
+        card.setObjectName("navbarcard")
+        card.setStyleSheet(card_qss("navbarcard"))
+
+        layout = QHBoxLayout(card)
         layout.setContentsMargins(24, 0, 24, 0)
         layout.setSpacing(0)
 
@@ -150,6 +158,7 @@ class _NavBar(QWidget):
             btn_container.addWidget(btn)
 
         layout.addLayout(btn_container)
+        outer.addWidget(card)
 
         self._current = 0
         self._refresh_buttons()
