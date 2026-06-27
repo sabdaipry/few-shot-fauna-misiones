@@ -118,7 +118,7 @@ class _HeroCard(QFrame):
         bc = QLabel("SAREKO / ANÁLISIS")
         bc.setStyleSheet(section_label_qss())
 
-        title = QLabel("Análisis de fauna silvestre")
+        title = QLabel("Herramienta de análisis automatizado de cámaras trampa")
         title.setStyleSheet(title_qss(32))
 
         desc = QLabel(
@@ -281,7 +281,7 @@ class _CargaCard(QFrame):
         self._btn_procesar.setStyleSheet(self._procesar_qss(False))
         layout.addWidget(self._btn_procesar)
 
-        note = QLabel("El procesamiento corre en segundo plano. La interfaz no se congela.")
+        note = QLabel("El procesamiento corre en segundo plano.")
         note.setStyleSheet(
             f"color: {ACCENT}; font-size: 11px; font-style: italic; background: transparent;"
         )

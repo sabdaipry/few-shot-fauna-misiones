@@ -109,23 +109,23 @@ class _NavBar(QWidget):
         card.setStyleSheet(card_qss("navbarcard"))
 
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(24, 0, 24, 0)
+        layout.setContentsMargins(12, 0, 12, 0)
         layout.setSpacing(0)
 
         # --- Branding izquierdo ---
         logo = QSvgWidget(str(_ASSETS / "SAREKO.svg"))
-        logo.setFixedSize(38, 38)
+        logo.setFixedSize(43, 60)
         logo.setStyleSheet("background: transparent;")
 
         name_label = QLabel("SAREKO")
         name_label.setStyleSheet(
-            f"color: {TEXT_PRIMARY}; font-size: 20px; font-weight: 700;"
-            " letter-spacing: 2px; background: transparent;"
+            f"color: {TEXT_PRIMARY}; font-size: 40px; font-weight: 600;"
+            " letter-spacing: 12px; background: transparent;"
         )
 
         sub_label = QLabel("Análisis automatizado de cámaras trampa")
         sub_label.setStyleSheet(
-            f"color: {ACCENT}; font-size: 10px; font-weight: 500;"
+            f"color: {ACCENT}; font-size: 11px; font-weight: 500;"
             " background: transparent;"
         )
 
