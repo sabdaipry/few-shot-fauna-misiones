@@ -70,19 +70,21 @@ from ..styles import (
 
 _ORANGE = "#e07840"
 
-_CATEGORY_KEYS = ["Correcta", "Top 5", "Conocida", "Desconocida"]
+_CATEGORY_KEYS = ["Correcta", "Top 5", "Conocida", "Desconocida", "Vacío / Ruido"]
 
 _CATEGORY_LABELS = {
-    "Correcta":    "Correctas",
-    "Top 5":       "Top 5",
-    "Conocida":    "Conocida fuera del top 5",
-    "Desconocida": "Desconocida",
+    "Correcta":      "Correctas",
+    "Top 5":         "Top 5",
+    "Conocida":      "Conocida fuera del top 5",
+    "Desconocida":   "Desconocida",
+    "Vacío / Ruido": "Vacío / Ruido",
 }
 _CATEGORY_COLORS = {
-    "Correcta":    SUCCESS,
-    "Top 5":       WARNING,
-    "Conocida":    _ORANGE,
-    "Desconocida": ERROR,
+    "Correcta":      SUCCESS,
+    "Top 5":         WARNING,
+    "Conocida":      _ORANGE,
+    "Desconocida":   ERROR,
+    "Vacío / Ruido": NEUTRAL,
 }
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,6 +178,8 @@ def _category_key_for(validation: dict) -> "str | None":
         return "Conocida"
     if cat == "Desconocida":
         return "Desconocida"
+    if cat == "Vacío / Ruido":
+        return "Vacío / Ruido"
     return None
 
 

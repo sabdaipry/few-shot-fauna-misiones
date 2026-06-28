@@ -755,10 +755,19 @@ class _ValidationCell(QWidget):
         else:
             category = text  # "Desconocida" o "Vacío / Ruido"
 
+        # Especie que el usuario confirmó como correcta (para mostrar en panel)
+        if custom:
+            validated_sp: "str | None" = custom
+        elif 1 <= idx <= len(top5):
+            validated_sp = top5[idx - 1].get("species", "")
+        else:
+            validated_sp = text  # "Desconocida" o "Vacío / Ruido"
+
         self._record["validation"] = {
-            "state":          "validated",
-            "category":       category,
-            "custom_species": custom,
+            "state":             "validated",
+            "category":          category,
+            "custom_species":    custom,
+            "validated_species": validated_sp,
         }
         self._show_validated()
         self.validated.emit(category, custom or "")
@@ -996,6 +1005,15 @@ class _SidePanel(QFrame):
         vc_lay.setContentsMargins(0, 0, 0, 0)
         self._layout.addWidget(self._val_cell_container)
 
+        self._lbl_validated_species = QLabel("")
+        self._lbl_validated_species.setStyleSheet(
+            f"color: {ACCENT}; font-size: 11px; font-weight: 600;"
+            " background: transparent; padding: 1px 0;"
+        )
+        self._lbl_validated_species.setWordWrap(True)
+        self._lbl_validated_species.hide()
+        self._layout.addWidget(self._lbl_validated_species)
+
         self._layout.addWidget(_sep())
 
         # ── Especies adicionales ─────────────────────────────────────────
@@ -1144,11 +1162,11 @@ class _SidePanel(QFrame):
                 txt += f" — {_fmt_time(ts)}"
             self._frame_lbl.setText(txt)
 
-        # Botón clip
-        has_path = filepath is not None and filepath.suffix.lower() in {
-            ".mp4", ".avi", ".mov"
-        }
-        self._btn_clip.setEnabled(has_path)
+        # Botón clip o imagen
+        _is_image = filepath is not None and filepath.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        _is_video = filepath is not None and filepath.suffix.lower() in {".mp4", ".avi", ".mov"}
+        self._btn_clip.setText("🔍 Abrir imagen" if _is_image else "▶ Ver clip completo")
+        self._btn_clip.setEnabled(_is_image or _is_video)
 
         # Distancia coseno
         dist = getattr(event, "cosine_distance", None)
@@ -1172,7 +1190,9 @@ class _SidePanel(QFrame):
         cell.validated.connect(
             lambda cat, sp: self.validation_saved.emit(self._current_row_idx, cat, sp)
         )
+        cell.validated.connect(lambda _c, _s: self._refresh_validated_species_label())
         self._val_cell_container.layout().addWidget(cell)
+        self._refresh_validated_species_label()
 
         # Especies adicionales
         self._extra_species.set_data(record.get("extra_species", []))
@@ -1214,6 +1234,47 @@ class _SidePanel(QFrame):
             if isinstance(w, _ValidationCell):
                 w.set_validated(category, species)
                 break
+        self._refresh_validated_species_label()
+
+    def _refresh_validated_species_label(self) -> None:
+        """Muestra el label con la especie confirmada por el usuario, si el evento está validado."""
+        if not self._current_record:
+            self._lbl_validated_species.hide()
+            return
+        val = self._current_record.get("validation", {})
+        if val.get("state") != "validated":
+            self._lbl_validated_species.hide()
+            return
+
+        sp = val.get("validated_species")
+        if sp is None:
+            # Compatibilidad con sesiones guardadas antes de agregar validated_species
+            cat = val.get("category", "")
+            if cat == "Correcta":
+                sp = getattr(self._current_record["event"], "species", None)
+            elif cat.startswith("Conocida — "):
+                sp = val.get("custom_species")
+            elif cat in ("Desconocida", "Vacío / Ruido"):
+                sp = cat
+
+        if not sp or sp in ("Desconocida", "Vacío / Ruido"):
+            self._lbl_validated_species.hide()
+            return
+
+        common = ""
+        for entry in self._species_catalog:
+            if entry.get("species") == sp:
+                c = entry.get("nombre_comun_es_ar", "")
+                if c and str(c).lower() not in ("", "nan", "none"):
+                    common = str(c)
+                break
+
+        text = (
+            f"Especie validada: {common} ({sp})" if common
+            else f"Especie validada: {sp}"
+        )
+        self._lbl_validated_species.setText(text)
+        self._lbl_validated_species.show()
 
     def _on_extra_species_changed(self, species_list: list) -> None:
         if self._current_record is not None:
@@ -1227,6 +1288,14 @@ class _SidePanel(QFrame):
             return
         filepath: Optional[Path] = record.get("filepath")
         if not filepath:
+            return
+
+        # Para imágenes: abrir directamente sin extraer clip
+        if filepath.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+            try:
+                os.startfile(str(filepath))
+            except Exception:
+                pass
             return
 
         event     = record["event"]

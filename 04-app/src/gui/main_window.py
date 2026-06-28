@@ -16,7 +16,7 @@ import csv
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QIcon, QPainter, QPixmap, QSize
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
     QFrame,
@@ -73,6 +73,35 @@ _DARK_MSG_QSS = """
         border-color: rgba(153,225,122,160);
     }
 """
+
+_SVG_TRASH_ICON = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2"'
+    ' xmlns="http://www.w3.org/2000/svg">'
+    '<polyline points="3 6 5 6 21 6"/>'
+    '<path d="M19 6l-1 14H6L5 6"/>'
+    '<path d="M10 11v6M14 11v6"/>'
+    '<path d="M9 6V4h6v2"/>'
+    '</svg>'
+)
+
+
+def _render_svg_icon(svg_tpl: str, color: str, size: int) -> "QIcon | None":
+    """Renderiza un SVG template (con {color}) a QIcon."""
+    try:
+        from PySide6.QtSvg import QSvgRenderer
+        data = svg_tpl.format(color=color).encode("utf-8")
+        renderer = QSvgRenderer(data)
+        if not renderer.isValid():
+            return None
+        px = QPixmap(size, size)
+        px.fill(Qt.GlobalColor.transparent)
+        p = QPainter(px)
+        renderer.render(p)
+        p.end()
+        return QIcon(px)
+    except Exception:
+        return None
+
 
 _ASSETS        = Path(__file__).resolve().parent.parent.parent / "assets"
 _CATALOG_CSV   = (
@@ -202,32 +231,6 @@ class _NavBar(QWidget):
         layout.addLayout(left)
         layout.addStretch()
 
-        # --- Botón Resetear ---
-        self._btn_reset = QPushButton("Resetear")
-        self._btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._btn_reset.setFixedHeight(32)
-        self._btn_reset.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(224,92,92,20);
-                color: rgba(237,239,236,180);
-                border: 1px solid rgba(224,92,92,60);
-                border-radius: 6px;
-                font-size: 11px;
-                font-weight: 600;
-                padding: 0 14px;
-                min-width: 80px;
-            }}
-            QPushButton:hover {{
-                background: rgba(224,92,92,50);
-                color: {TEXT_PRIMARY};
-                border-color: rgba(224,92,92,120);
-            }}
-        """)
-        self._btn_reset.clicked.connect(self.reset_requested)
-        layout.addWidget(self._btn_reset)
-        layout.addSpacing(12)
-
         # --- Botones de pestaña ---
         self._buttons: list[QPushButton] = []
         btn_container = QHBoxLayout()
@@ -243,6 +246,31 @@ class _NavBar(QWidget):
             btn_container.addWidget(btn)
 
         layout.addLayout(btn_container)
+        layout.addSpacing(12)
+
+        # --- Botón Resetear (ícono papelera, extremo derecho) ---
+        self._btn_reset = QPushButton()
+        self._btn_reset.setToolTip("Resetear historial completo")
+        self._btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._btn_reset.setFixedSize(32, 32)
+        _reset_icon = _render_svg_icon(_SVG_TRASH_ICON, "#e05c5c", 18)
+        if _reset_icon:
+            self._btn_reset.setIcon(_reset_icon)
+            self._btn_reset.setIconSize(QSize(18, 18))
+        self._btn_reset.setStyleSheet("""
+            QPushButton {
+                background: rgba(224,92,92,20);
+                border: 1px solid rgba(224,92,92,60);
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background: rgba(224,92,92,50);
+                border-color: rgba(224,92,92,120);
+            }
+        """)
+        self._btn_reset.clicked.connect(self.reset_requested)
+        layout.addWidget(self._btn_reset)
         outer.addWidget(card)
 
         self._current = 0
