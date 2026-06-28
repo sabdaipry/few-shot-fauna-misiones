@@ -129,6 +129,14 @@ class SessionManager:
         except Exception:
             pass
 
+    @classmethod
+    def clear_history(cls) -> None:
+        """Elimina el archivo de historial acumulado."""
+        try:
+            _HISTORY_PATH.unlink(missing_ok=True)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Historial acumulado (history.json)
 

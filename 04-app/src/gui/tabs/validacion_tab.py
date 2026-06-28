@@ -1915,6 +1915,13 @@ class ValidacionTab(QWidget):
         self._records = list(records)
         self._apply_filter(self._search_card.query)
 
+    def reset(self) -> None:
+        """Deja la pestaña en el mismo estado que al abrir la app por primera vez."""
+        if self._panel_open:
+            self._panel.close_panel()
+        self._search_card._field.clear()
+        self.restore_records([])
+
     # ------------------------------------------------------------------
     # API pública — eventos
 

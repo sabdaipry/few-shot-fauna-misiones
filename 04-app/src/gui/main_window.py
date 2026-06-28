@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -45,6 +46,33 @@ from .tabs.analisis_tab import AnalisisTab
 from .tabs.evaluacion_tab import EvaluacionTab
 from .tabs.validacion_tab import ValidacionTab
 from ..data.session import SessionManager
+
+_DARK_MSG_QSS = """
+    QMessageBox {
+        background: #0d1a0b;
+        color: #edefec;
+    }
+    QMessageBox QLabel {
+        color: #edefec;
+        font-size: 13px;
+        background: transparent;
+    }
+    QPushButton {
+        background: rgba(153,225,122,30);
+        color: #edefec;
+        border: 1px solid rgba(153,225,122,80);
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 16px;
+        min-width: 130px;
+    }
+    QPushButton:hover { background: rgba(153,225,122,50); }
+    QPushButton:default {
+        background: rgba(153,225,122,60);
+        border-color: rgba(153,225,122,160);
+    }
+"""
 
 _ASSETS        = Path(__file__).resolve().parent.parent.parent / "assets"
 _CATALOG_CSV   = (
@@ -120,7 +148,8 @@ class _BackgroundWidget(QWidget):
 class _NavBar(QWidget):
     """Barra de navegación fija con logo y tres botones de pestaña."""
 
-    tab_selected = Signal(int)
+    tab_selected    = Signal(int)
+    reset_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -172,6 +201,32 @@ class _NavBar(QWidget):
 
         layout.addLayout(left)
         layout.addStretch()
+
+        # --- Botón Resetear ---
+        self._btn_reset = QPushButton("Resetear")
+        self._btn_reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_reset.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._btn_reset.setFixedHeight(32)
+        self._btn_reset.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(224,92,92,20);
+                color: rgba(237,239,236,180);
+                border: 1px solid rgba(224,92,92,60);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 14px;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background: rgba(224,92,92,50);
+                color: {TEXT_PRIMARY};
+                border-color: rgba(224,92,92,120);
+            }}
+        """)
+        self._btn_reset.clicked.connect(self.reset_requested)
+        layout.addWidget(self._btn_reset)
+        layout.addSpacing(12)
 
         # --- Botones de pestaña ---
         self._buttons: list[QPushButton] = []
@@ -322,6 +377,7 @@ class MainWindow(QMainWindow):
 
         # Conectar navbar → stack
         self._navbar.tab_selected.connect(self._stack.setCurrentIndex)
+        self._navbar.reset_requested.connect(self._on_reset)
 
         # Propagar eventos completados de Análisis → Validación
         self._analisis_tab.events_ready.connect(self._on_events_ready)
@@ -386,6 +442,27 @@ class MainWindow(QMainWindow):
         self._save_session()
         # restore_records reconstruye la tabla leyendo el estado actual de los dicts
         self._validacion_tab.restore_records(self._validacion_tab.get_records())
+
+    def _on_reset(self) -> None:
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Confirmar reset")
+        msg.setText(
+            "Esto eliminará todos los registros de validación, el historial de corridas "
+            "y los datos de evaluación.\n\n"
+            "Esta acción no se puede deshacer. ¿Confirmar?"
+        )
+        msg.setStyleSheet(_DARK_MSG_QSS)
+        btn_ok     = msg.addButton("Confirmar", QMessageBox.ButtonRole.AcceptRole)
+        btn_cancel = msg.addButton("Cancelar",  QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(btn_cancel)
+        msg.exec()
+        if msg.clickedButton() != btn_ok:
+            return
+        SessionManager.clear()
+        SessionManager.clear_history()
+        self._analisis_tab.reset()
+        self._validacion_tab.reset()
+        self._evaluacion_tab.reset()
 
     def closeEvent(self, event) -> None:
         self._save_session()

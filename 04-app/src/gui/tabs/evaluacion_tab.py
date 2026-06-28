@@ -1656,3 +1656,7 @@ class EvaluacionTab(QWidget):
         self._error_card.update_data(records)
         self._charts_card.update_data(records, batch_summary, history)
         self._multi_card.update_data(records)
+
+    def reset(self) -> None:
+        """Deja la pestaña en el mismo estado que al abrir la app por primera vez."""
+        self.update_from_session([], {}, None)

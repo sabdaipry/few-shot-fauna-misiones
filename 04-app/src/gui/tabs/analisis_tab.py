@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -45,15 +46,17 @@ from ..styles import (
     title_qss,
 )
 from src.workers.processing_worker import ProcessingWorker
+from src.data.session import SessionManager
 
 VIDEO_EXTS = {"*.mp4", "*.avi", "*.mov"}
 IMAGE_EXTS = {"*.jpg", "*.jpeg", "*.png"}
 ALL_FILTER  = "Archivos soportados (*.mp4 *.avi *.mov *.jpg *.jpeg *.png)"
 
+# Formato: (nombre, N, K, M, descripción)
 _MODES = [
-    ("Básico",    60, "Rápido, menor cobertura temporal."),
-    ("Estándar",  30, "Balance velocidad / detalle."),
-    ("Profundo",  10, "Lento, máxima cobertura temporal."),
+    ("Básico",   60,  5,  3, "Rápido, menor cobertura temporal."),
+    ("Estándar", 30, 10,  6, "Balance velocidad / detalle."),
+    ("Profundo", 10, 15,  9, "Lento, máxima cobertura temporal."),
 ]
 
 _STAGES = [
@@ -71,6 +74,33 @@ _BADGE_COLORS = {
     "completado": SUCCESS,
     "error":      ERROR,
 }
+
+_DARK_MSG_QSS = """
+    QMessageBox {
+        background: #0d1a0b;
+        color: #edefec;
+    }
+    QMessageBox QLabel {
+        color: #edefec;
+        font-size: 13px;
+        background: transparent;
+    }
+    QPushButton {
+        background: rgba(153,225,122,30);
+        color: #edefec;
+        border: 1px solid rgba(153,225,122,80);
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 16px;
+        min-width: 130px;
+    }
+    QPushButton:hover { background: rgba(153,225,122,50); }
+    QPushButton:default {
+        background: rgba(153,225,122,60);
+        border-color: rgba(153,225,122,160);
+    }
+"""
 
 
 def _sep() -> QFrame:
@@ -215,6 +245,8 @@ class _HeroCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class _CargaCard(QFrame):
+    files_added = Signal(list)  # emitida al seleccionar archivos o carpeta
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("cargacard")
@@ -222,6 +254,7 @@ class _CargaCard(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self._selected_files: list[Path] = []
+        self._is_processing: bool = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
@@ -272,12 +305,12 @@ class _CargaCard(QFrame):
                 border: 1px solid rgba(153,225,122,80);
             }}
         """)
-        for name, _, _ in _MODES:
+        for name, *_ in _MODES:
             self._combo.addItem(name)
         self._combo.setCurrentIndex(1)  # Estándar por defecto
         layout.addWidget(self._combo)
 
-        self._lbl_desc = QLabel(_MODES[1][2])
+        self._lbl_desc = QLabel(_MODES[1][4])
         self._lbl_desc.setStyleSheet(body_qss(0.55))
         self._lbl_desc.setWordWrap(True)
         layout.addWidget(self._lbl_desc)
@@ -354,16 +387,14 @@ class _CargaCard(QFrame):
             "Archivos soportados (*.mp4 *.avi *.mov *.jpg *.jpeg *.png)"
         )
         if paths:
-            self._selected_files = [Path(p) for p in paths]
-            self._update_file_label()
+            self.files_added.emit([Path(p) for p in paths])
 
     def _pick_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta")
         if folder:
             p = Path(folder)
             exts = {".mp4", ".avi", ".mov", ".jpg", ".jpeg", ".png"}
-            self._selected_files = [f for f in p.iterdir() if f.suffix.lower() in exts]
-            self._update_file_label()
+            self.files_added.emit([f for f in p.iterdir() if f.suffix.lower() in exts])
 
     def _update_file_label(self) -> None:
         n = len(self._selected_files)
@@ -373,11 +404,12 @@ class _CargaCard(QFrame):
             self._lbl_files.setText(f"1 archivo seleccionado: {self._selected_files[0].name}")
         else:
             self._lbl_files.setText(f"{n} archivos seleccionados")
-        self._btn_procesar.setEnabled(n > 0)
-        self._btn_procesar.setStyleSheet(self._procesar_qss(n > 0))
+        enabled = n > 0 and not self._is_processing
+        self._btn_procesar.setEnabled(enabled)
+        self._btn_procesar.setStyleSheet(self._procesar_qss(enabled))
 
     def _on_mode_changed(self, idx: int) -> None:
-        self._lbl_desc.setText(_MODES[idx][2])
+        self._lbl_desc.setText(_MODES[idx][4])
 
     # ------------------------------------------------------------------
     # API pública
@@ -391,12 +423,30 @@ class _CargaCard(QFrame):
         return _MODES[self._combo.currentIndex()][1]
 
     @property
+    def mode_K(self) -> int:
+        return _MODES[self._combo.currentIndex()][2]
+
+    @property
+    def mode_M(self) -> int:
+        return _MODES[self._combo.currentIndex()][3]
+
+    @property
     def btn_procesar(self) -> QPushButton:
         return self._btn_procesar
 
+    def set_selected_files(self, files: list) -> None:
+        self._selected_files = list(files)
+        self._update_file_label()
+
+    def set_pending_label(self, n_pending: int) -> None:
+        if n_pending == 1:
+            self._lbl_files.setText("1 archivo en cola de procesamiento")
+        else:
+            self._lbl_files.setText(f"{n_pending} archivos en cola de procesamiento")
+
     def set_processing(self, active: bool) -> None:
-        self._btn_files.setEnabled(not active)
-        self._btn_folder.setEnabled(not active)
+        self._is_processing = active
+        # Los botones de selección permanecen habilitados durante el procesamiento
         self._combo.setEnabled(not active)
         if active:
             self._btn_procesar.setText("Procesando…")
@@ -525,7 +575,6 @@ class _SeguimientoCard(QFrame):
         self._lbl_pct.setText(f"{pct} %")
 
     def update_stage(self, stage: str, pct: int) -> None:
-        # Búsqueda parcial para tolerar variaciones de nombre
         for key in self._stage_bars:
             if key.lower() in stage.lower() or stage.lower() in key.lower():
                 self._stage_bars[key].setValue(pct)
@@ -869,7 +918,7 @@ class _BatchCard(QFrame):
         hl.addWidget(pct_lbl)
         return w, pb, pct_lbl
 
-    def _mk_actions_cell(self, name: str) -> tuple[QWidget, QPushButton]:
+    def _mk_actions_cell(self, name: str) -> tuple[QWidget, QPushButton, QPushButton]:
         w = QWidget()
         w.setStyleSheet("background: transparent;")
         hl = QHBoxLayout(w)
@@ -935,50 +984,56 @@ class _BatchCard(QFrame):
         self._btn_xlsx.setEnabled(False)
 
         for file_path in files:
+            self._insert_row(file_path)
+
+    def add_pending(self, files: list) -> None:
+        """Agrega archivos nuevos a la tabla como 'en cola' sin borrar el estado existente."""
+        for file_path in files:
             name = file_path.name if hasattr(file_path, "name") else str(file_path)
-            r = self._table.rowCount()
-            self._table.insertRow(r)
-            self._table.setRowHeight(r, 44)
+            if name in self._rows:
+                continue  # ya está en la tabla
+            self._insert_row(file_path)
 
-            # Col 0 — Archivo
-            self._table.setItem(r, 0, QTableWidgetItem(name))
+    def _insert_row(self, file_path) -> None:
+        """Inserta una fila nueva en la tabla con estado 'en cola'."""
+        name = file_path.name if hasattr(file_path, "name") else str(file_path)
+        r = self._table.rowCount()
+        self._table.insertRow(r)
+        self._table.setRowHeight(r, 44)
 
-            # Col 1 — Estado
-            badge_w, badge_lbl = self._mk_badge_cell("en cola")
-            self._table.setCellWidget(r, 1, badge_w)
+        self._table.setItem(r, 0, QTableWidgetItem(name))
 
-            # Col 2 — Progreso
-            prog_w, prog_bar, prog_lbl = self._mk_progress_cell()
-            self._table.setCellWidget(r, 2, prog_w)
+        badge_w, badge_lbl = self._mk_badge_cell("en cola")
+        self._table.setCellWidget(r, 1, badge_w)
 
-            # Col 3 — Especies
-            it3 = QTableWidgetItem("—")
-            it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(r, 3, it3)
+        prog_w, prog_bar, prog_lbl = self._mk_progress_cell()
+        self._table.setCellWidget(r, 2, prog_w)
 
-            # Col 4 — Detalle
-            self._table.setItem(r, 4, QTableWidgetItem("—"))
+        it3 = QTableWidgetItem("—")
+        it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.setItem(r, 3, it3)
 
-            # Col 5 — Acciones
-            act_w, btn_resume, btn_ver = self._mk_actions_cell(name)
-            btn_ver.setEnabled(False)
-            self._table.setCellWidget(r, 5, act_w)
+        self._table.setItem(r, 4, QTableWidgetItem("—"))
 
-            self._rows[name] = {
-                "row_idx":     r,
-                "badge_lbl":   badge_lbl,
-                "prog_bar":    prog_bar,
-                "prog_lbl":    prog_lbl,
-                "btn_resume":  btn_resume,
-                "btn_ver":     btn_ver,
-                "state":       "en cola",
-                "pct":         0,
-                "events":      [],
-                "meta":        None,
-                "error_msg":   "",
-                "error_stage": "",
-                "path":        file_path,
-            }
+        act_w, btn_resume, btn_ver = self._mk_actions_cell(name)
+        btn_ver.setEnabled(False)
+        self._table.setCellWidget(r, 5, act_w)
+
+        self._rows[name] = {
+            "row_idx":     r,
+            "badge_lbl":   badge_lbl,
+            "prog_bar":    prog_bar,
+            "prog_lbl":    prog_lbl,
+            "btn_resume":  btn_resume,
+            "btn_ver":     btn_ver,
+            "state":       "en cola",
+            "pct":         0,
+            "events":      [],
+            "meta":        None,
+            "error_msg":   "",
+            "error_stage": "",
+            "path":        file_path,
+        }
 
     def on_file_started(self, name: str) -> None:
         self._current_file = name
@@ -995,7 +1050,6 @@ class _BatchCard(QFrame):
         self._current_stage = stage
         if not self._current_file or self._current_file not in self._rows:
             return
-        # La etapa de embeddings es la más larga; usarla como proxy del progreso por archivo
         if "embeddings" in stage.lower():
             self._update_progress(self._current_file, pct)
             self._rows[self._current_file]["pct"] = pct
@@ -1012,7 +1066,6 @@ class _BatchCard(QFrame):
         self._update_progress(name, 100)
         row["btn_ver"].setEnabled(True)
 
-        # Columna Especies: cuenta de especies únicas
         species = sorted({
             getattr(ev, "species", "")
             for ev in events if getattr(ev, "species", "")
@@ -1021,7 +1074,6 @@ class _BatchCard(QFrame):
             str(len(species)) if species else "—"
         )
 
-        # Columna Detalle: rangos de tiempo (BiologicalEvent) o descripción breve
         intervals = [
             f"{_fmt_time(ev.start_time)}–{_fmt_time(ev.end_time)}"
             for ev in events if hasattr(ev, "start_time")
@@ -1173,7 +1225,6 @@ class _BatchCard(QFrame):
         try:
             import openpyxl
         except ImportError:
-            # openpyxl no disponible — fallback a CSV
             self._export_csv()
             return
         path, _ = QFileDialog.getSaveFileName(
@@ -1207,6 +1258,7 @@ class AnalisisTab(QWidget):
         self.setStyleSheet("background: transparent;")
 
         self._worker: ProcessingWorker | None = None
+        self._pending_files: list[Path] = []
         self._species_seen: set[str] = set()
         self._total_frames = 0
         self._current_mode: str = "Estándar"
@@ -1237,6 +1289,7 @@ class AnalisisTab(QWidget):
 
         # Señales
         self._carga.btn_procesar.clicked.connect(self._start_processing)
+        self._carga.files_added.connect(self._on_files_added)
         self._batch.resume_requested.connect(self._on_resume_requested)
 
     # ------------------------------------------------------------------
@@ -1253,13 +1306,15 @@ class AnalisisTab(QWidget):
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
-
-        # Poblar tabla con todos los archivos en "en cola"
         self._batch.populate(files)
+        self._launch_worker(files)
 
+    def _launch_worker(self, files: list[Path]) -> None:
+        """Crea e inicia un ProcessingWorker con los parámetros del modo actual."""
         N = self._carga.mode_N
-        self._worker = ProcessingWorker(files, N=N, K=10, M=6, batch_size=8)
-
+        K = self._carga.mode_K
+        M = self._carga.mode_M
+        self._worker = ProcessingWorker(files, N=N, K=K, M=M, batch_size=8)
         self._worker.progress_updated.connect(self._seg.update_progress)
         self._worker.stage_updated.connect(self._seg.update_stage)
         self._worker.stage_updated.connect(self._batch.on_stage_updated)
@@ -1268,8 +1323,53 @@ class AnalisisTab(QWidget):
         self._worker.file_completed.connect(self._on_file_completed)
         self._worker.error_occurred.connect(self._on_error)
         self._worker.finished.connect(self._on_finished)
-
         self._worker.start()
+
+    def _on_files_added(self, files: list[Path]) -> None:
+        """Recibe archivos seleccionados por el usuario; ruteados según estado del worker."""
+        filtered = self._check_duplicates(files)
+        if filtered is None or not filtered:
+            return
+        if self._worker is not None:
+            self._pending_files.extend(filtered)
+            self._batch.add_pending(filtered)
+            self._carga.set_pending_label(len(self._pending_files))
+        else:
+            self._carga.set_selected_files(filtered)
+
+    def _check_duplicates(self, files: list[Path]) -> "list[Path] | None":
+        """Verifica duplicados contra history.json. Devuelve lista filtrada o None si cancelado."""
+        history = SessionManager.load_history()
+        processed = {r.get("filename", "") for r in history.get("latency_records", [])}
+        dups = [f for f in files if f.name in processed]
+        if not dups:
+            return files
+
+        names_str = "\n".join(f"  • {f.name}" for f in dups[:8])
+        if len(dups) > 8:
+            names_str += f"\n  … y {len(dups) - 8} más"
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Archivos ya procesados")
+        msg.setText(
+            f"Los siguientes archivos ya fueron procesados anteriormente:\n\n"
+            f"{names_str}\n\n"
+            "Si continuás, se duplicarán las entradas en Validación y Evaluación. "
+            "¿Querés procesarlos de todas formas?"
+        )
+        msg.setStyleSheet(_DARK_MSG_QSS)
+        btn_all    = msg.addButton("Procesar de todas formas", QMessageBox.ButtonRole.AcceptRole)
+        btn_skip   = msg.addButton("Omitir duplicados",         QMessageBox.ButtonRole.AcceptRole)
+        btn_cancel = msg.addButton("Cancelar",                   QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(btn_skip)
+        msg.exec()
+
+        clicked = msg.clickedButton()
+        if clicked == btn_cancel:
+            return None
+        if clicked == btn_skip:
+            return [f for f in files if f.name not in processed]
+        return files
 
     def _on_file_started(self, name: str) -> None:
         self._batch.on_file_started(name)
@@ -1293,11 +1393,18 @@ class AnalisisTab(QWidget):
         self._hero.set_active("error")
 
     def _on_finished(self) -> None:
-        self._hero.set_active("completado")
-        self._carga.set_processing(False)
-        self._seg.update_progress(100)
         self._worker = None
-        self.run_finished.emit()
+        if self._pending_files:
+            pending = list(self._pending_files)
+            self._pending_files.clear()
+            self._seg.reset()
+            self._hero.set_active("procesando")
+            self._launch_worker(pending)
+        else:
+            self._hero.set_active("completado")
+            self._carga.set_processing(False)
+            self._seg.update_progress(100)
+            self.run_finished.emit()
 
     # ------------------------------------------------------------------
     # Persistencia de sesión
@@ -1373,6 +1480,22 @@ class AnalisisTab(QWidget):
         """Devuelve el nombre del modo de análisis actualmente seleccionado."""
         return self._current_mode
 
+    def reset(self) -> None:
+        """Deja la pestaña en el mismo estado que al abrir la app por primera vez."""
+        if self._worker is not None:
+            self._worker.stop()
+            self._worker.wait(1000)
+            self._worker = None
+        self._pending_files.clear()
+        self._species_seen.clear()
+        self._total_frames = 0
+        self._current_mode = "Estándar"
+        self._hero.reset()
+        self._seg.reset()
+        self._batch.populate([])
+        self._carga.set_selected_files([])
+        self._carga.set_processing(False)
+
     def _on_resume_requested(self, name: str) -> None:
         """Reintenta procesar un archivo que falló."""
         if self._worker is not None:
@@ -1385,17 +1508,4 @@ class AnalisisTab(QWidget):
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
-
-        N = self._carga.mode_N
-        self._worker = ProcessingWorker(matching, N=N, K=10, M=6, batch_size=8)
-
-        self._worker.progress_updated.connect(self._seg.update_progress)
-        self._worker.stage_updated.connect(self._seg.update_stage)
-        self._worker.stage_updated.connect(self._batch.on_stage_updated)
-        self._worker.metrics_updated.connect(self._seg.update_metrics)
-        self._worker.file_started.connect(self._on_file_started)
-        self._worker.file_completed.connect(self._on_file_completed)
-        self._worker.error_occurred.connect(self._on_error)
-        self._worker.finished.connect(self._on_finished)
-
-        self._worker.start()
+        self._launch_worker(matching)
