@@ -20,11 +20,13 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     Qt,
+    QTimer,
     Signal,
 )
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QCompleter,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -89,6 +91,59 @@ _SPECIAL_OPTS = ["Desconocida", "Vacío / Ruido", "Ingreso manual..."]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _build_completer_data(species_catalog: list) -> tuple[list[str], dict[str, str]]:
+    """
+    Construye (display_strings, display_to_species) para el QCompleter.
+
+    display_strings: "nombre_comun_es_ar (Nombre científico)" o solo el nombre
+    científico cuando no hay nombre común.
+    display_to_species: mapeo display → nombre científico, para rellenar
+    el QLineEdit con la especie correcta al seleccionar una sugerencia.
+    """
+    display_strings: list[str] = []
+    display_to_species: dict[str, str] = {}
+    seen: set[str] = set()
+    for entry in species_catalog:
+        sp = entry.get("species", "")
+        if not sp or sp in seen:
+            continue
+        seen.add(sp)
+        common = entry.get("nombre_comun_es_ar", "")
+        if common and str(common).lower() not in ("", "nan", "none"):
+            display = f"{common} ({sp})"
+        else:
+            display = sp
+        display_strings.append(display)
+        display_to_species[display] = sp
+    return display_strings, display_to_species
+
+
+def _completer_popup_qss() -> str:
+    return """
+        QAbstractItemView {
+            background: #1a1a1a;
+            color: #edefec;
+            selection-background-color: #1f2c1d;
+            border: 1px solid #99e17a;
+            font-size: 12px;
+            padding: 2px;
+        }
+    """
+
+
+def _make_completer(species_catalog: list, parent) -> "tuple[QCompleter | None, dict[str, str]]":
+    """Crea un QCompleter con MatchContains + CaseInsensitive para el catálogo."""
+    if not species_catalog:
+        return None, {}
+    display_strings, display_to_species = _build_completer_data(species_catalog)
+    completer = QCompleter(display_strings, parent)
+    completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+    completer.setFilterMode(Qt.MatchFlag.MatchContains)
+    completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+    completer.popup().setStyleSheet(_completer_popup_qss())
+    return completer, display_to_species
+
 
 def _fmt_time(sec: float) -> str:
     s = max(0, int(sec))
@@ -557,10 +612,11 @@ class _ValidationCell(QWidget):
 
     validated = Signal(str, str)  # category, custom_species (or "")
 
-    def __init__(self, record: dict, parent=None):
+    def __init__(self, record: dict, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
         self.setStyleSheet("background: transparent;")
-        self._record = record
+        self._record          = record
+        self._species_catalog = species_catalog or []
 
         hl = QHBoxLayout(self)
         hl.setContentsMargins(4, 2, 4, 2)
@@ -647,6 +703,7 @@ class _ValidationCell(QWidget):
         if text == "Ingreso manual...":
             dlg = QDialog(self)
             dlg.setWindowTitle("Ingresar especie manualmente")
+            dlg.setMinimumWidth(380)
             dlg.setStyleSheet("""
                 QDialog { background-color: #1a1a1a; color: #edefec; }
                 QLabel { color: #edefec; }
@@ -656,6 +713,7 @@ class _ValidationCell(QWidget):
                     border: 1px solid #99e17a;
                     border-radius: 6px;
                     padding: 4px 8px;
+                    font-size: 12px;
                 }
                 QPushButton {
                     background-color: #1f2c1d;
@@ -668,10 +726,26 @@ class _ValidationCell(QWidget):
                 QPushButton:hover { background-color: #2d3f2a; }
             """)
             dlg_layout = QVBoxLayout(dlg)
-            dlg_layout.addWidget(QLabel("Nombre científico de la especie:"))
+            dlg_layout.setSpacing(8)
+            lbl_hint = QLabel("Nombre científico de la especie:")
+            lbl_hint.setStyleSheet("color: #edefec; font-size: 12px;")
+            dlg_layout.addWidget(lbl_hint)
+
             le = QLineEdit()
+            le.setPlaceholderText("Escribe para buscar en el catálogo…")
+            completer, display_to_species = _make_completer(self._species_catalog, le)
+            if completer is not None:
+                completer.activated[str].connect(
+                    lambda t, _le=le, _m=display_to_species: QTimer.singleShot(
+                        0, lambda: _le.setText(_m.get(t, t))
+                    )
+                )
+                le.setCompleter(completer)
             dlg_layout.addWidget(le)
-            btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+
+            btns = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
             btns.accepted.connect(dlg.accept)
             btns.rejected.connect(dlg.reject)
             dlg_layout.addWidget(btns)
@@ -731,11 +805,13 @@ class _ValidationCell(QWidget):
 class _SidePanel(QFrame):
     """Panel de detalle que desliza desde la derecha."""
 
-    closed           = Signal()
-    validation_saved = Signal(int, str, str)  # row_idx, category, custom_species
+    closed                = Signal()
+    validation_saved      = Signal(int, str, str)   # row_idx, category, custom_species
+    multi_species_changed = Signal(int, list)        # global_idx, species_list
 
-    def __init__(self, parent=None):
+    def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
+        self._species_catalog = species_catalog or []
         self.setObjectName("sidepanel")
         self.setStyleSheet(card_qss("sidepanel"))
         self.setMinimumWidth(0)
@@ -925,6 +1001,17 @@ class _SidePanel(QFrame):
 
         self._layout.addWidget(_sep())
 
+        # ── Especies adicionales ─────────────────────────────────────────
+        lbl_extra = QLabel("ESPECIES ADICIONALES")
+        lbl_extra.setStyleSheet(section_label_qss())
+        self._layout.addWidget(lbl_extra)
+
+        self._extra_species = _ExtraSpeciesSection(self._species_catalog)
+        self._extra_species.species_changed.connect(self._on_extra_species_changed)
+        self._layout.addWidget(self._extra_species)
+
+        self._layout.addWidget(_sep())
+
         # ── Top-5 candidatos (tabla pequeña) ────────────────────────────
         lbl_top5 = QLabel("TOP 5 CANDIDATOS")
         lbl_top5.setStyleSheet(section_label_qss())
@@ -1068,11 +1155,14 @@ class _SidePanel(QFrame):
             w = self._val_cell_container.layout().itemAt(i).widget()
             if w:
                 w.deleteLater()
-        cell = _ValidationCell(record)
+        cell = _ValidationCell(record, self._species_catalog)
         cell.validated.connect(
             lambda cat, sp: self.validation_saved.emit(self._current_row_idx, cat, sp)
         )
         self._val_cell_container.layout().addWidget(cell)
+
+        # Especies adicionales
+        self._extra_species.set_data(record.get("extra_species", []))
 
         # Top-5 tabla
         top5 = getattr(event, "top5_candidates", [])
@@ -1111,6 +1201,12 @@ class _SidePanel(QFrame):
             if isinstance(w, _ValidationCell):
                 w.set_validated(category, species)
                 break
+
+    def _on_extra_species_changed(self, species_list: list) -> None:
+        if self._current_record is not None:
+            self._current_record["extra_species"] = species_list
+            self._current_record["multi_species"] = bool(species_list)
+        self.multi_species_changed.emit(self._current_row_idx, species_list)
 
     def _open_clip(self) -> None:
         record = self._current_record
@@ -1181,6 +1277,210 @@ class _SidePanel(QFrame):
 
 
 # ---------------------------------------------------------------------------
+# Sección de especies adicionales (panel lateral)
+# ---------------------------------------------------------------------------
+
+class _ExtraSpeciesSection(QWidget):
+    """
+    Lista dinámica de especies adicionales con campo inline para agregar.
+    Emite species_changed(list) al agregar o eliminar una especie.
+    """
+
+    species_changed = Signal(list)
+
+    def __init__(self, species_catalog: list | None = None, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background: transparent;")
+        self._catalog = species_catalog or []
+        self._species: list[str] = []
+        self._display_to_species: dict[str, str] = {}
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(4)
+
+        # Lista dinámica
+        self._list_container = QWidget()
+        self._list_container.setStyleSheet("background: transparent;")
+        self._list_layout = QVBoxLayout(self._list_container)
+        self._list_layout.setContentsMargins(0, 0, 0, 0)
+        self._list_layout.setSpacing(2)
+        root.addWidget(self._list_container)
+
+        # Botón "+ Agregar especie"
+        self._btn_add = QPushButton("+ Agregar especie")
+        self._btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_add.setFixedHeight(26)
+        self._btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(153,225,122,15);
+                color: {ACCENT};
+                border: 1px solid rgba(153,225,122,70);
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 10px;
+            }}
+            QPushButton:hover {{ background: rgba(153,225,122,35); }}
+        """)
+        self._btn_add.clicked.connect(self._show_input)
+        root.addWidget(self._btn_add)
+
+        # Fila de input inline (oculta por defecto)
+        self._input_row = QWidget()
+        self._input_row.setStyleSheet("background: transparent;")
+        in_lay = QHBoxLayout(self._input_row)
+        in_lay.setContentsMargins(0, 0, 0, 0)
+        in_lay.setSpacing(4)
+
+        self._le = QLineEdit()
+        self._le.setPlaceholderText("Escribe para buscar en el catálogo…")
+        self._le.setStyleSheet(f"""
+            QLineEdit {{
+                background: rgba(0,0,0,100);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,80);
+                border-radius: 5px;
+                padding: 3px 8px;
+                font-size: 11px;
+            }}
+            QLineEdit:focus {{ border-color: {ACCENT}; }}
+        """)
+        self._le.returnPressed.connect(self._confirm_add)
+
+        completer, self._display_to_species = _make_completer(self._catalog, self._le)
+        if completer is not None:
+            completer.activated[str].connect(
+                lambda t, _m=self._display_to_species: QTimer.singleShot(
+                    0, lambda: self._le.setText(_m.get(t, t))
+                )
+            )
+            self._le.setCompleter(completer)
+
+        _btn_confirm = QPushButton("Confirmar")
+        _btn_confirm.setCursor(Qt.CursorShape.PointingHandCursor)
+        _btn_confirm.setFixedHeight(26)
+        _btn_confirm.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(153,225,122,30);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,100);
+                border-radius: 5px;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 0 8px;
+            }}
+            QPushButton:hover {{ background: rgba(153,225,122,55); }}
+        """)
+        _btn_confirm.clicked.connect(self._confirm_add)
+
+        _btn_cancel = QPushButton("✕")
+        _btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        _btn_cancel.setFixedSize(26, 26)
+        _btn_cancel.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: rgba(237,239,236,80);
+                border: none;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ color: {TEXT_PRIMARY}; }}
+        """)
+        _btn_cancel.clicked.connect(self._hide_input)
+
+        in_lay.addWidget(self._le, 1)
+        in_lay.addWidget(_btn_confirm)
+        in_lay.addWidget(_btn_cancel)
+        root.addWidget(self._input_row)
+        self._input_row.hide()
+
+    # ------------------------------------------------------------------
+
+    def set_data(self, species_list: list) -> None:
+        self._species = list(species_list)
+        self._hide_input()
+        self._rebuild_list()
+
+    def get_data(self) -> list:
+        return list(self._species)
+
+    def _rebuild_list(self) -> None:
+        for i in reversed(range(self._list_layout.count())):
+            item = self._list_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        for sp in self._species:
+            self._list_layout.addWidget(self._make_row(sp))
+
+    def _make_row(self, species: str) -> QWidget:
+        common = ""
+        for entry in self._catalog:
+            if entry.get("species") == species:
+                c = entry.get("nombre_comun_es_ar", "")
+                if c and str(c).lower() not in ("", "nan", "none"):
+                    common = str(c)
+                break
+        display = f"{species} — {common}" if common else species
+
+        row = QWidget()
+        row.setStyleSheet("background: transparent;")
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 2, 0, 2)
+        lay.setSpacing(6)
+
+        lbl = QLabel(display)
+        lbl.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 11px; font-style: italic;"
+            " background: transparent;"
+        )
+        lbl.setWordWrap(True)
+
+        btn_del = QPushButton("✕")
+        btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_del.setFixedSize(18, 18)
+        btn_del.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: rgba(224,92,92,160);
+                border: none;
+                font-size: 10px;
+            }}
+            QPushButton:hover {{ color: #e05c5c; }}
+        """)
+        btn_del.clicked.connect(lambda _, s=species: self._remove(s))
+
+        lay.addWidget(lbl, 1)
+        lay.addWidget(btn_del)
+        return row
+
+    def _show_input(self) -> None:
+        self._le.clear()
+        self._btn_add.hide()
+        self._input_row.show()
+        self._le.setFocus()
+
+    def _hide_input(self) -> None:
+        self._input_row.hide()
+        self._btn_add.show()
+
+    def _confirm_add(self) -> None:
+        sp = self._le.text().strip()
+        if not sp or sp in self._species:
+            self._hide_input()
+            return
+        self._species.append(sp)
+        self._rebuild_list()
+        self._hide_input()
+        self.species_changed.emit(list(self._species))
+
+    def _remove(self, species: str) -> None:
+        if species in self._species:
+            self._species.remove(species)
+            self._rebuild_list()
+            self.species_changed.emit(list(self._species))
+
+
+# ---------------------------------------------------------------------------
 # Sección de registros: tabla paginada + controles
 # ---------------------------------------------------------------------------
 
@@ -1191,8 +1491,9 @@ class _RegistrosSection(QFrame):
     delete_requested    = Signal(int)            # índice global en _filtered
     validation_happened = Signal(int, str, str)  # global_idx, category, custom_species
 
-    def __init__(self, parent=None):
+    def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
+        self._species_catalog = species_catalog or []
         self.setObjectName("registroscard")
         self.setStyleSheet(card_qss("registroscard"))
 
@@ -1397,7 +1698,7 @@ class _RegistrosSection(QFrame):
             self._table.setItem(local_idx, 5, it5)
 
             # Col 6 — Validación
-            val_cell = _ValidationCell(record)
+            val_cell = _ValidationCell(record, self._species_catalog)
             val_cell.validated.connect(
                 lambda cat, sp, gi=global_idx: self.validation_happened.emit(gi, cat, sp)
             )
@@ -1552,11 +1853,12 @@ class ValidacionTab(QWidget):
 
     validation_changed = Signal()  # emitida al guardar cualquier validación
 
-    def __init__(self, parent=None):
+    def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet("background: transparent;")
 
+        self._species_catalog = species_catalog or []
         self._records:  list[dict] = []     # todos los registros en memoria
         self._filtered: list[dict] = []     # subconjunto tras aplicar filtro
         self._page        = 0
@@ -1582,8 +1884,8 @@ class ValidacionTab(QWidget):
         content_row.setSpacing(12)
         content_row.setContentsMargins(0, 0, 0, 0)
 
-        self._registros = _RegistrosSection()
-        self._panel     = _SidePanel()
+        self._registros = _RegistrosSection(self._species_catalog)
+        self._panel     = _SidePanel(self._species_catalog)
 
         content_row.addWidget(self._registros, 1)
         content_row.addWidget(self._panel)
@@ -1599,6 +1901,7 @@ class ValidacionTab(QWidget):
         self._registros.validation_happened.connect(self._on_table_validation)
         self._panel.closed.connect(self._on_panel_closed)
         self._panel.validation_saved.connect(self._on_panel_validation_saved)
+        self._panel.multi_species_changed.connect(self._on_multi_species_changed)
 
     # ------------------------------------------------------------------
     # API pública — sesión
@@ -1624,14 +1927,16 @@ class ValidacionTab(QWidget):
         """Agrega los eventos de un archivo procesado a la tabla."""
         for event in events:
             self._records.append({
-                "filename": filename,
-                "filepath": filepath,
-                "event":    event,
+                "filename":     filename,
+                "filepath":     filepath,
+                "event":        event,
                 "validation": {
                     "state":          "pending",
                     "category":       None,
                     "custom_species": None,
                 },
+                "extra_species": [],
+                "multi_species": False,
             })
         self._apply_filter(self._search_card.query)
 
@@ -1684,4 +1989,11 @@ class ValidacionTab(QWidget):
     def _on_table_validation(self, global_idx: int, category: str, species: str) -> None:
         if self._panel_open and global_idx == self._panel_row_idx:
             self._panel.sync_validation(category, species)
+        self.validation_changed.emit()
+
+    def _on_multi_species_changed(self, global_idx: int, species_list: list) -> None:
+        if 0 <= global_idx < len(self._filtered):
+            rec = self._filtered[global_idx]
+            rec["extra_species"] = species_list
+            rec["multi_species"] = bool(species_list)
         self.validation_changed.emit()

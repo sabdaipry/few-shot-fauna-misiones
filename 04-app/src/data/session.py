@@ -64,12 +64,14 @@ class SessionManager:
             "saved_at":      datetime.now(timezone.utc).isoformat(),
             "events":        [
                 {
-                    "filename":   r["filename"],
-                    "filepath":   str(r["filepath"]) if r.get("filepath") else None,
-                    "event":      _event_to_dict(r["event"]),
-                    "validation": r.get("validation", {
+                    "filename":     r["filename"],
+                    "filepath":     str(r["filepath"]) if r.get("filepath") else None,
+                    "event":        _event_to_dict(r["event"]),
+                    "validation":   r.get("validation", {
                         "state": "pending", "category": None, "custom_species": None,
                     }),
+                    "extra_species": r.get("extra_species", []),
+                    "multi_species": r.get("multi_species", False),
                 }
                 for r in events
             ],
@@ -101,12 +103,14 @@ class SessionManager:
             for r in data.get("events", []):
                 fp_str = r.get("filepath")
                 events.append({
-                    "filename":   r["filename"],
-                    "filepath":   Path(fp_str) if fp_str else None,
-                    "event":      _event_from_dict(r.get("event", {})),
-                    "validation": r.get("validation", {
+                    "filename":     r["filename"],
+                    "filepath":     Path(fp_str) if fp_str else None,
+                    "event":        _event_from_dict(r.get("event", {})),
+                    "validation":   r.get("validation", {
                         "state": "pending", "category": None, "custom_species": None,
                     }),
+                    "extra_species": r.get("extra_species", []),
+                    "multi_species": r.get("multi_species", False),
                 })
 
             batch_summary = data.get("batch_summary", {})

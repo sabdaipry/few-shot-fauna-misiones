@@ -405,10 +405,11 @@ class _ErrorDetailsTable(QFrame):
         layout.addLayout(hrow)
         layout.addWidget(_sep())
 
-        self._table = QTableWidget(0, 7)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESP. ESPERADA",
-            "ESP. PREDICHA", "CONFIANZA", "DECISOR", "TOP 5 CANDIDATOS",
+            "ESP. PREDICHA", "CONFIANZA", "DECISOR",
+            "TOP 5 CANDIDATOS", "ESPECIES ADICIONALES",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -418,6 +419,7 @@ class _ErrorDetailsTable(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 80)
         self._table.setColumnWidth(4, 100)
@@ -497,6 +499,13 @@ class _ErrorDetailsTable(QFrame):
             it6.setToolTip(top5_str)
             self._table.setItem(i, 6, it6)
 
+            # Col 7 — Especies adicionales
+            extra = record.get("extra_species", [])
+            extra_str = ", ".join(extra) if extra else "—"
+            it7 = QTableWidgetItem(extra_str)
+            it7.setToolTip(extra_str)
+            self._table.setItem(i, 7, it7)
+
     def _italic_cell(self, text: str) -> QWidget:
         w = QWidget()
         w.setStyleSheet("background: transparent;")
@@ -523,15 +532,17 @@ class _ErrorDetailsTable(QFrame):
                 f"{_fmt_time(st)} – {_fmt_time(et)}"
                 if st is not None and et is not None else "—"
             )
-            top5 = getattr(ev, "top5_candidates", [])
+            top5  = getattr(ev, "top5_candidates", [])
+            extra = rec.get("extra_species", [])
             out.append({
-                "archivo":          rec["filename"],
-                "intervalo":        ivl,
-                "especie_esperada": _expected_species(rec),
-                "especie_predicha": getattr(ev, "species", "—"),
-                "confianza":        getattr(ev, "confidence_level", "—"),
-                "decisor":          _get_decisor(ev),
-                "top5_candidatos":  ", ".join(c.get("species", "?") for c in top5),
+                "archivo":              rec["filename"],
+                "intervalo":            ivl,
+                "especie_esperada":     _expected_species(rec),
+                "especie_predicha":     getattr(ev, "species", "—"),
+                "confianza":            getattr(ev, "confidence_level", "—"),
+                "decisor":              _get_decisor(ev),
+                "top5_candidatos":      ", ".join(c.get("species", "?") for c in top5),
+                "especies_adicionales": ", ".join(extra) if extra else "",
             })
         return out
 

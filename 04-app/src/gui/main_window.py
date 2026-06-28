@@ -12,6 +12,7 @@ Estructura:
                      └── EvaluacionTab
 """
 
+import csv
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -45,7 +46,32 @@ from .tabs.evaluacion_tab import EvaluacionTab
 from .tabs.validacion_tab import ValidacionTab
 from ..data.session import SessionManager
 
-_ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
+_ASSETS        = Path(__file__).resolve().parent.parent.parent / "assets"
+_CATALOG_CSV   = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "02-benchmarking" / "data" / "dataset_index.csv"
+)
+
+
+def _load_species_catalog() -> list[dict]:
+    """Lee dataset_index.csv y devuelve lista de dicts únicos por especie."""
+    try:
+        catalog: list[dict] = []
+        seen: set[str] = set()
+        with open(_CATALOG_CSV, newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                sp = row.get("species", "").strip()
+                if sp and sp not in seen:
+                    seen.add(sp)
+                    catalog.append({
+                        "species":           sp,
+                        "nombre_comun_es_ar": row.get("nombre_comun_es_ar", ""),
+                        "nombre_comun_en":    row.get("nombre_comun_en", ""),
+                    })
+        return catalog
+    except Exception:
+        return []
 
 _TAB_LABELS = ["Análisis", "Validación", "Evaluación"]
 _TAB_BREADCRUMBS = [
@@ -282,9 +308,12 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(scroll)
 
+        # Catálogo de especies (cargado una sola vez)
+        _species_catalog = _load_species_catalog()
+
         # Páginas de cada pestaña
         self._analisis_tab   = AnalisisTab()
-        self._validacion_tab = ValidacionTab()
+        self._validacion_tab = ValidacionTab(species_catalog=_species_catalog)
         self._evaluacion_tab = EvaluacionTab()
 
         self._stack.addWidget(self._analisis_tab)
