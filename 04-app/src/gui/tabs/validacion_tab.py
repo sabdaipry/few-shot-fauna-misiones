@@ -56,16 +56,18 @@ except ImportError:
 
 from ..styles import (
     ACCENT,
-    ERROR,
     NEUTRAL,
     SUCCESS,
     TEXT_PRIMARY,
-    WARNING,
     badge_qss,
+    badge_qss_for,
     body_qss,
     card_qss,
+    icon_eye_btn,
+    icon_trash_btn,
     section_label_qss,
     title_qss,
+    validation_badge_qss,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,12 +80,6 @@ _CLIPS_DIR  = _APP_DIR / "SAREKO_clips"
 
 PAGE_SIZE    = 20
 PANEL_WIDTH  = 420
-
-_CONF_COLORS = {
-    "alta":    SUCCESS,
-    "baja":    ERROR,
-    "ambiguo": WARNING,
-}
 
 _SPECIAL_OPTS = ["Desconocida", "Vacío / Ruido", "Ingreso manual..."]
 
@@ -775,7 +771,7 @@ class _ValidationCell(QWidget):
         cat = self._record["validation"].get("category", "Validado")
         short = cat if len(cat) <= 20 else cat[:18] + "…"
         self._badge.setText(f"✓ {short}")
-        self._badge.setStyleSheet(badge_qss(SUCCESS))
+        self._badge.setStyleSheet(validation_badge_qss(cat))
         self._combo.setVisible(False)
         self._btn_val.setVisible(False)
         self._badge.setVisible(True)
@@ -1144,7 +1140,7 @@ class _SidePanel(QFrame):
         # Badge confianza
         conf = _get_confidence_level(event)
         self._badge_conf.setText(conf)
-        self._badge_conf.setStyleSheet(badge_qss(_CONF_COLORS.get(conf, NEUTRAL)))
+        self._badge_conf.setStyleSheet(badge_qss_for(conf))
 
         # Método de asignación
         decisor = _get_decisor(event)
@@ -1688,7 +1684,7 @@ class _RegistrosSection(QFrame):
             b_lbl = QLabel(conf)
             b_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             b_lbl.setFixedHeight(20)
-            b_lbl.setStyleSheet(badge_qss(_CONF_COLORS.get(conf, NEUTRAL)))
+            b_lbl.setStyleSheet(badge_qss_for(conf))
             b_lay.addWidget(b_lbl)
             self._table.setCellWidget(local_idx, 4, badge_w)
 
@@ -1710,10 +1706,10 @@ class _RegistrosSection(QFrame):
             act_w.setStyleSheet("background: transparent;")
             act_l = QHBoxLayout(act_w)
             act_l.setContentsMargins(4, 2, 4, 2)
-            act_l.setSpacing(6)
+            act_l.setSpacing(4)
 
-            btn_ver = _action_btn("Ver detalle")
-            btn_del = _action_btn("Eliminar", danger=True)
+            btn_ver = icon_eye_btn("Ver detalle")
+            btn_del = icon_trash_btn("Eliminar")
 
             btn_ver.clicked.connect(lambda _=False, r=record, gi=global_idx: self.detail_requested.emit(r, gi))
             btn_del.clicked.connect(lambda _=False, gi=global_idx: self._confirm_delete(gi))

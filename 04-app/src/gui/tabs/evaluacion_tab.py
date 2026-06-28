@@ -56,8 +56,10 @@ from ..styles import (
     TEXT_PRIMARY,
     WARNING,
     badge_qss,
+    badge_qss_for,
     body_qss,
     card_qss,
+    icon_eye_btn,
     section_label_qss,
     title_qss,
 )
@@ -82,13 +84,6 @@ _CATEGORY_COLORS = {
     "Conocida":    _ORANGE,
     "Desconocida": ERROR,
 }
-_CONF_COLORS = {
-    "alta":    SUCCESS,
-    "baja":    ERROR,
-    "ambiguo": WARNING,
-}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -526,7 +521,7 @@ class _ErrorDetailsTable(QFrame):
             b_lbl = QLabel(conf)
             b_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             b_lbl.setFixedHeight(20)
-            b_lbl.setStyleSheet(badge_qss(_CONF_COLORS.get(conf, NEUTRAL)))
+            b_lbl.setStyleSheet(badge_qss_for(conf))
             bl.addWidget(b_lbl)
             self._table.setCellWidget(i, 4, badge_w)
 
@@ -555,7 +550,7 @@ class _ErrorDetailsTable(QFrame):
             act_l = QHBoxLayout(act_w)
             act_l.setContentsMargins(4, 2, 4, 2)
             act_l.setSpacing(0)
-            btn_ver = _action_btn("Ver detalle")
+            btn_ver = icon_eye_btn("Ver detalle")
             btn_ver.clicked.connect(
                 lambda _=False, r=record: self.detail_requested.emit(r)
             )
@@ -1081,7 +1076,7 @@ class _MultispeciesCard(QFrame):
             act_l = QHBoxLayout(act_w)
             act_l.setContentsMargins(4, 2, 4, 2)
             act_l.setSpacing(0)
-            btn_ver = _action_btn("Ver detalle")
+            btn_ver = icon_eye_btn("Ver detalle")
             try:
                 global_idx = self._all_records.index(record)
             except ValueError:
@@ -1125,6 +1120,138 @@ class _MultispeciesCard(QFrame):
             writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
             writer.writeheader()
             writer.writerows(rows)
+
+
+# ---------------------------------------------------------------------------
+# Card de ancho completo — especies fuera del catálogo ingresadas manualmente
+# ---------------------------------------------------------------------------
+
+class _UnknownSpeciesCard(QFrame):
+    """
+    Muestra las especies ingresadas manualmente por el usuario que no están
+    en el top-5 del pipeline (campo custom_species).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("unknownspeciescard")
+        self.setStyleSheet(card_qss("unknownspeciescard"))
+
+        self._records: list[dict] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
+
+        # ── Header ───────────────────────────────────────────────────────
+        hrow = QHBoxLayout()
+        hrow.setContentsMargins(0, 0, 0, 0)
+
+        sec = QLabel("ESPECIES FUERA DEL CATÁLOGO")
+        sec.setStyleSheet(section_label_qss())
+        hrow.addWidget(sec)
+        hrow.addStretch()
+
+        self._btn_csv = _export_btn("Exportar CSV")
+        self._btn_csv.setEnabled(False)
+        self._btn_csv.clicked.connect(self._export_csv)
+        hrow.addWidget(self._btn_csv)
+
+        layout.addLayout(hrow)
+        layout.addWidget(_sep())
+
+        # ── Estado vacío ─────────────────────────────────────────────────
+        self._empty_lbl = QLabel("Sin especies fuera del catálogo registradas")
+        self._empty_lbl.setStyleSheet(
+            f"color: {NEUTRAL}; font-size: 13px; font-style: italic;"
+            " background: transparent;"
+        )
+        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_lbl.setMinimumHeight(56)
+        layout.addWidget(self._empty_lbl)
+
+        # ── Tabla ─────────────────────────────────────────────────────────
+        self._table = QTableWidget(0, 3)
+        self._table.setHorizontalHeaderLabels([
+            "ESPECIE INGRESADA", "CANTIDAD DE REGISTROS", "ARCHIVOS DONDE APARECIÓ",
+        ])
+        hh = self._table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(1, 180)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._table.setStyleSheet(_table_qss())
+        self._table.setMinimumHeight(80)
+        self._table.setMaximumHeight(280)
+        self._table.hide()
+        layout.addWidget(self._table)
+
+    # ------------------------------------------------------------------
+
+    def update_data(self, records: list[dict]) -> None:
+        self._records = records
+        aggregated = self._aggregate(records)
+        has = bool(aggregated)
+        self._empty_lbl.setVisible(not has)
+        self._table.setVisible(has)
+        self._btn_csv.setEnabled(has)
+        if has:
+            self._rebuild(aggregated)
+
+    def _aggregate(self, records: list[dict]) -> dict[str, dict]:
+        """Agrupa por custom_species → {count, files}."""
+        result: dict[str, dict] = {}
+        for rec in records:
+            sp = rec.get("validation", {}).get("custom_species")
+            if not sp:
+                continue
+            if sp not in result:
+                result[sp] = {"count": 0, "files": set()}
+            result[sp]["count"] += 1
+            result[sp]["files"].add(rec.get("filename", "—"))
+        return result
+
+    def _rebuild(self, aggregated: dict[str, dict]) -> None:
+        self._table.setRowCount(0)
+        for i, (sp, info) in enumerate(sorted(aggregated.items())):
+            self._table.insertRow(i)
+            self._table.setRowHeight(i, 36)
+
+            it0 = QTableWidgetItem(sp)
+            it0.setToolTip(sp)
+            self._table.setItem(i, 0, it0)
+
+            it1 = QTableWidgetItem(str(info["count"]))
+            it1.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 1, it1)
+
+            files_str = ", ".join(sorted(info["files"]))
+            it2 = QTableWidgetItem(files_str)
+            it2.setToolTip(files_str)
+            self._table.setItem(i, 2, it2)
+
+    def _export_csv(self) -> None:
+        aggregated = self._aggregate(self._records)
+        if not aggregated:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar CSV",
+            "sareko_especies_fuera_catalogo.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        import csv as _csv
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = _csv.writer(fh)
+            writer.writerow(["especie_ingresada", "cantidad_registros", "archivos"])
+            for sp, info in sorted(aggregated.items()):
+                writer.writerow([sp, info["count"], ", ".join(sorted(info["files"]))])
 
 
 # ---------------------------------------------------------------------------
@@ -1545,15 +1672,17 @@ class EvaluacionTab(QWidget):
         body_col.setSpacing(16)
 
         # Cards de contenido
-        self._latency_card = _LatencyCard()
-        self._error_card   = _ErrorEvalCard()
-        self._charts_card  = _ChartsCard()
-        self._multi_card   = _MultispeciesCard()
-        self._empty_state  = _EmptyState()
+        self._latency_card  = _LatencyCard()
+        self._error_card    = _ErrorEvalCard()
+        self._charts_card   = _ChartsCard()
+        self._multi_card    = _MultispeciesCard()
+        self._unknown_card  = _UnknownSpeciesCard()
+        self._empty_state   = _EmptyState()
 
         body_col.addWidget(self._latency_card)
         body_col.addWidget(self._error_card)
         body_col.addWidget(self._multi_card)
+        body_col.addWidget(self._unknown_card)
         body_col.addWidget(self._charts_card)
         body_col.addWidget(self._empty_state)
         body_col.addStretch()
@@ -1570,6 +1699,7 @@ class EvaluacionTab(QWidget):
         self._error_card.hide()
         self._charts_card.hide()
         self._multi_card.hide()
+        self._unknown_card.hide()
 
         # ── Conexiones de señales ─────────────────────────────────────────
         self._error_card.detail_requested.connect(self._on_error_detail_requested)
@@ -1645,6 +1775,7 @@ class EvaluacionTab(QWidget):
         self._error_card.setVisible(has_data)
         self._charts_card.setVisible(has_data)
         self._multi_card.setVisible(has_data)
+        self._unknown_card.setVisible(has_data)
 
         if not has_data:
             self._summary_card.reset()
@@ -1656,6 +1787,7 @@ class EvaluacionTab(QWidget):
         self._error_card.update_data(records)
         self._charts_card.update_data(records, batch_summary, history)
         self._multi_card.update_data(records)
+        self._unknown_card.update_data(records)
 
     def reset(self) -> None:
         """Deja la pestaña en el mismo estado que al abrir la app por primera vez."""

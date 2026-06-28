@@ -34,14 +34,13 @@ from PySide6.QtWidgets import (
 
 from ..styles import (
     ACCENT,
-    ERROR,
     NEUTRAL,
-    SUCCESS,
     TEXT_PRIMARY,
-    WARNING,
     badge_qss,
+    badge_qss_for,
     body_qss,
     card_qss,
+    icon_eye_btn,
     section_label_qss,
     title_qss,
 )
@@ -54,9 +53,15 @@ ALL_FILTER  = "Archivos soportados (*.mp4 *.avi *.mov *.jpg *.jpeg *.png)"
 
 # Formato: (nombre, N, K, M, descripción)
 _MODES = [
-    ("Básico",   60,  5,  3, "Rápido, menor cobertura temporal."),
-    ("Estándar", 30, 10,  6, "Balance velocidad / detalle."),
-    ("Profundo", 10, 15,  9, "Lento, máxima cobertura temporal."),
+    ("Básico",   60,  5,  3,
+     "1 frame cada 60 frames (0.5 fps). Rápido, menor cobertura temporal. "
+     "Recomendado para lotes grandes."),
+    ("Estándar", 30, 10,  6,
+     "1 frame cada 30 frames (1 fps). Balance entre velocidad y detalle. "
+     "Recomendado para uso general."),
+    ("Profundo", 10, 15,  9,
+     "1 frame cada 10 frames (3 fps). Máxima cobertura temporal. "
+     "Recomendado para eventos cortos o fauna esquiva."),
 ]
 
 _STAGES = [
@@ -67,13 +72,6 @@ _STAGES = [
     "Consenso temporal",
     "Escritura de resultados",
 ]
-
-_BADGE_COLORS = {
-    "en cola":    NEUTRAL,
-    "procesando": WARNING,
-    "completado": SUCCESS,
-    "error":      ERROR,
-}
 
 _DARK_MSG_QSS = """
     QMessageBox {
@@ -221,9 +219,8 @@ class _HeroCard(QFrame):
         return lbl
 
     def set_active(self, estado: str) -> None:
-        color = _BADGE_COLORS.get(estado, NEUTRAL)
         self._badge_estado.setText(estado)
-        self._badge_estado.setStyleSheet(badge_qss(color))
+        self._badge_estado.setStyleSheet(badge_qss_for(estado))
 
     def set_especies(self, n: int) -> None:
         self._lbl_especies.setText(str(n))
@@ -542,6 +539,12 @@ class _SeguimientoCard(QFrame):
         self._stage_bars:   dict[str, QProgressBar] = {}
         self._stage_labels: dict[str, QLabel]       = {}
 
+        # Referencias especiales para la etapa "Extracción de frames" (Fix 5)
+        self._frame_stage_pb:   QProgressBar | None = None
+        self._frame_stage_pct:  QLabel | None       = None
+        self._frame_stage_na:   QLabel | None       = None
+        self._frame_stage_name: QLabel | None       = None
+
         for stage in _STAGES:
             row_w = QWidget()
             row_w.setStyleSheet("background: transparent;")
@@ -549,9 +552,9 @@ class _SeguimientoCard(QFrame):
             row_l.setContentsMargins(0, 0, 0, 0)
             row_l.setSpacing(8)
 
-            name = QLabel(stage)
-            name.setStyleSheet(body_qss(0.65))
-            name.setFixedWidth(240)
+            name_lbl = QLabel(stage)
+            name_lbl.setStyleSheet(body_qss(0.65))
+            name_lbl.setFixedWidth(240)
 
             pb = _progress_bar(6)
             pct_lbl = QLabel("0 %")
@@ -559,9 +562,23 @@ class _SeguimientoCard(QFrame):
             pct_lbl.setFixedWidth(36)
             pct_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
-            row_l.addWidget(name)
+            row_l.addWidget(name_lbl)
             row_l.addWidget(pb, 1)
             row_l.addWidget(pct_lbl)
+
+            if stage == "Extracción de frames":
+                na_badge = QLabel("N/A")
+                na_badge.setStyleSheet(badge_qss("#4a5248"))
+                na_badge.setToolTip("No aplica para imágenes individuales")
+                na_badge.setFixedHeight(20)
+                na_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                na_badge.hide()
+                row_l.addWidget(na_badge)
+                self._frame_stage_pb   = pb
+                self._frame_stage_pct  = pct_lbl
+                self._frame_stage_na   = na_badge
+                self._frame_stage_name = name_lbl
+
             layout.addWidget(row_w)
 
             self._stage_bars[stage]   = pb
@@ -597,9 +614,23 @@ class _SeguimientoCard(QFrame):
                 self._metric_vals[i].setText(v)
 
         estado = data.get("estado", "en espera")
-        color = _BADGE_COLORS.get(estado, NEUTRAL)
         self._badge.setText(estado)
-        self._badge.setStyleSheet(badge_qss(color))
+        self._badge.setStyleSheet(badge_qss_for(estado))
+
+    def set_frame_extraction_na(self, is_na: bool) -> None:
+        """Muestra badge N/A para 'Extracción de frames' cuando el archivo es imagen."""
+        if self._frame_stage_pb is None:
+            return
+        self._frame_stage_pb.setVisible(not is_na)
+        if self._frame_stage_pct:
+            self._frame_stage_pct.setVisible(not is_na)
+        if self._frame_stage_na:
+            self._frame_stage_na.setVisible(is_na)
+        if self._frame_stage_name:
+            color = "#4a5248" if is_na else "rgba(237,239,236,166)"
+            self._frame_stage_name.setStyleSheet(
+                f"color: {color}; font-size: 14px; background: transparent;"
+            )
 
     def reset(self) -> None:
         self._progress_bar.setValue(0)
@@ -612,6 +643,7 @@ class _SeguimientoCard(QFrame):
             pb.setValue(0)
         for lbl in self._stage_labels.values():
             lbl.setText("0 %")
+        self.set_frame_extraction_na(False)
 
 
 # ---------------------------------------------------------------------------
@@ -897,7 +929,7 @@ class _BatchCard(QFrame):
         lbl = QLabel(state)
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setFixedHeight(22)
-        lbl.setStyleSheet(badge_qss(_BADGE_COLORS.get(state, NEUTRAL)))
+        lbl.setStyleSheet(badge_qss_for(state))
         hl.addWidget(lbl)
         return container, lbl
 
@@ -925,26 +957,7 @@ class _BatchCard(QFrame):
         hl.setContentsMargins(4, 2, 4, 2)
         hl.setSpacing(6)
 
-        btn_ver = QPushButton("Ver detalles")
-        btn_ver.setFixedHeight(26)
-        btn_ver.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_ver.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(153,225,122,20);
-                color: {TEXT_PRIMARY};
-                border: 1px solid rgba(153,225,122,80);
-                border-radius: 5px;
-                font-size: 11px;
-                font-weight: 600;
-                padding: 0 10px;
-            }}
-            QPushButton:hover {{ background: rgba(153,225,122,40); }}
-            QPushButton:disabled {{
-                background: rgba(74,82,72,20);
-                color: rgba(237,239,236,40);
-                border-color: rgba(74,82,72,50);
-            }}
-        """)
+        btn_ver = icon_eye_btn("Ver detalles")
         btn_ver.clicked.connect(lambda: self._toggle_detail(name))
 
         btn_resume = QPushButton("Reanudar")
@@ -1166,7 +1179,7 @@ class _BatchCard(QFrame):
     def _update_badge(self, name: str, state: str) -> None:
         lbl = self._rows[name]["badge_lbl"]
         lbl.setText(state)
-        lbl.setStyleSheet(badge_qss(_BADGE_COLORS.get(state, NEUTRAL)))
+        lbl.setStyleSheet(badge_qss_for(state))
 
     def _update_progress(self, name: str, pct: int) -> None:
         row = self._rows[name]
@@ -1373,6 +1386,8 @@ class AnalisisTab(QWidget):
 
     def _on_file_started(self, name: str) -> None:
         self._batch.on_file_started(name)
+        is_image = Path(name).suffix.lower() in {".jpg", ".jpeg", ".png"}
+        self._seg.set_frame_extraction_na(is_image)
 
     def _on_file_completed(self, name: str, events: list, meta: dict) -> None:
         self._batch.on_file_completed(name, events, meta)
