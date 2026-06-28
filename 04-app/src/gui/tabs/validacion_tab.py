@@ -1401,7 +1401,13 @@ class ValidacionTab(QWidget):
     API pública:
         add_events(filename, events, filepath=None)
             — llamar desde AnalisisTab al completarse cada archivo.
+        get_records() -> list[dict]
+            — devuelve copia de todos los registros para serializar en sesión.
+        restore_records(records)
+            — restaura registros desde una sesión guardada.
     """
+
+    validation_changed = Signal()  # emitida al guardar cualquier validación
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1452,7 +1458,19 @@ class ValidacionTab(QWidget):
         self._panel.validation_saved.connect(self._on_panel_validation_saved)
 
     # ------------------------------------------------------------------
-    # API pública
+    # API pública — sesión
+
+    def get_records(self) -> list[dict]:
+        """Devuelve copia superficial de todos los registros en memoria."""
+        return list(self._records)
+
+    def restore_records(self, records: list[dict]) -> None:
+        """Reemplaza los registros en memoria con los cargados desde sesión."""
+        self._records = list(records)
+        self._apply_filter(self._search_card.query)
+
+    # ------------------------------------------------------------------
+    # API pública — eventos
 
     def add_events(
         self,
@@ -1516,7 +1534,9 @@ class ValidacionTab(QWidget):
 
     def _on_panel_validation_saved(self, row_idx: int, category: str, species: str) -> None:
         self._registros.update_table_cell_validation(row_idx, category, species)
+        self.validation_changed.emit()
 
     def _on_table_validation(self, global_idx: int, category: str, species: str) -> None:
         if self._panel_open and global_idx == self._panel_row_idx:
             self._panel.sync_validation(category, species)
+        self.validation_changed.emit()

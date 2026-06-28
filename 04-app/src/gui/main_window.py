@@ -42,6 +42,7 @@ from .styles import (
 )
 from .tabs.analisis_tab import AnalisisTab
 from .tabs.validacion_tab import ValidacionTab
+from ..data.session import SessionManager
 
 _ASSETS = Path(__file__).resolve().parent.parent.parent / "assets"
 
@@ -298,8 +299,35 @@ class MainWindow(QMainWindow):
         # Propagar eventos completados de Análisis → Validación
         self._analisis_tab.events_ready.connect(self._on_events_ready)
 
+        # Persistencia de sesión: guardar al completar cada archivo y al validar
+        self._analisis_tab.batch_changed.connect(self._save_session)
+        self._validacion_tab.validation_changed.connect(self._save_session)
+
+        # Restaurar sesión previa si existe
+        self._restore_session()
+
     # ------------------------------------------------------------------
 
     def _on_events_ready(self, filename: str, events: list, filepath_str: str) -> None:
         fp = Path(filepath_str) if filepath_str else None
         self._validacion_tab.add_events(filename, events, fp)
+
+    def _save_session(self) -> None:
+        records = self._validacion_tab.get_records()
+        summary = self._analisis_tab.get_batch_summary()
+        SessionManager.save(records, summary)
+
+    def _restore_session(self) -> None:
+        result = SessionManager.load()
+        if result is None:
+            return
+        records, summary = result
+        self._validacion_tab.restore_records(records)
+        self._analisis_tab.restore_batch(summary, records)
+
+    def closeEvent(self, event) -> None:
+        self._save_session()
+        worker = SessionManager._worker
+        if worker and worker.isRunning():
+            worker.wait(2000)
+        super().closeEvent(event)

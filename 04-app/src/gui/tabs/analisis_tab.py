@@ -1024,6 +1024,22 @@ class _BatchCard(QFrame):
         if self._detail_target == name:
             self._detail.show_error(name, row["error_stage"], msg, row["pct"])
 
+    def restore_error(self, name: str, msg: str, stage: str, pct: int) -> None:
+        """Restaura el estado de error de un archivo desde una sesión guardada."""
+        if name not in self._rows:
+            return
+        row = self._rows[name]
+        row["state"]       = "error"
+        row["pct"]         = pct
+        row["error_msg"]   = msg
+        row["error_stage"] = stage or "desconocida"
+        self._update_badge(name, "error")
+        self._update_progress(name, pct)
+        row["btn_resume"].setVisible(True)
+        item = self._table.item(row["row_idx"], 4)
+        if item:
+            item.setText(f"Error: {msg[:60]}")
+
     # ── Slots internos ───────────────────────────────────────────────────
 
     def _on_detail_closed(self) -> None:
@@ -1131,7 +1147,8 @@ class _BatchCard(QFrame):
 class AnalisisTab(QWidget):
     """Pestaña Análisis completa."""
 
-    events_ready = Signal(str, list, str)  # (filename, events, filepath_str)
+    events_ready  = Signal(str, list, str)  # (filename, events, filepath_str)
+    batch_changed = Signal()               # emitida al completarse cada archivo
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1216,6 +1233,7 @@ class AnalisisTab(QWidget):
         matching = [f for f in self._carga.selected_files if f.name == name]
         fp_str = str(matching[0]) if matching else ""
         self.events_ready.emit(name, events, fp_str)
+        self.batch_changed.emit()
 
     def _on_error(self, filename: str, msg: str) -> None:
         self._batch.on_file_error(filename, msg)
@@ -1226,6 +1244,70 @@ class AnalisisTab(QWidget):
         self._carga.set_processing(False)
         self._seg.update_progress(100)
         self._worker = None
+
+    # ------------------------------------------------------------------
+    # Persistencia de sesión
+
+    def get_batch_summary(self) -> dict:
+        """Devuelve el estado actual del lote para serializar en sesión."""
+        files = []
+        for name, row in self._batch._rows.items():
+            path = row.get("path")
+            files.append({
+                "name":        name,
+                "path":        str(path) if path else None,
+                "state":       row["state"],
+                "pct":         row["pct"],
+                "error_msg":   row.get("error_msg", ""),
+                "error_stage": row.get("error_stage", ""),
+            })
+        return {
+            "files":        files,
+            "species_seen": list(self._species_seen),
+            "total_frames": self._total_frames,
+        }
+
+    def restore_batch(self, summary: dict, records: list[dict]) -> None:
+        """Reconstruye la tabla de lote desde una sesión guardada."""
+        files_data = summary.get("files", [])
+        if not files_data:
+            return
+
+        events_by_file: dict[str, list] = {}
+        for r in records:
+            events_by_file.setdefault(r["filename"], []).append(r["event"])
+
+        self._species_seen = set(summary.get("species_seen", []))
+        self._total_frames = summary.get("total_frames", 0)
+
+        file_paths = [
+            Path(fd["path"]) if fd.get("path") else Path(fd["name"])
+            for fd in files_data
+        ]
+        self._batch.populate(file_paths)
+
+        has_error = False
+        n_completed = 0
+        for fd in files_data:
+            name  = fd["name"]
+            state = fd["state"]
+            if state == "completado":
+                self._batch.on_file_completed(name, events_by_file.get(name, []))
+                n_completed += 1
+            elif state in ("error", "procesando"):
+                has_error = True
+                stage = fd.get("error_stage", "desconocida") if state == "error" else "desconocida"
+                msg   = fd.get("error_msg", "Procesamiento interrumpido")
+                self._batch.restore_error(name, msg, stage, fd.get("pct", 0))
+
+        self._hero.set_especies(len(self._species_seen))
+        self._hero.set_frames(self._total_frames)
+        if has_error:
+            self._hero.set_active("error")
+        elif n_completed > 0:
+            self._hero.set_active("completado")
+
+    # ------------------------------------------------------------------
 
     def _on_resume_requested(self, name: str) -> None:
         """Reintenta procesar un archivo que falló."""

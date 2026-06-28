@@ -1,9 +1,9 @@
-# ── Entornos virtuales ──────────────────────────────────────────────
+﻿# â”€â”€ Entornos virtuales â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 venv/
 .venv/
 .env
 
-# ── Caché de Python ──────────────────────────────────────────────────
+# â”€â”€ CachÃ© de Python â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 __pycache__/
 *.pyc
 *.pyo
@@ -13,10 +13,10 @@ __pycache__/
 dist/
 build/
 
-# ── Embeddings / features ────────────────────────────────────────────
+# â”€â”€ Embeddings / features â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 features/
 
-# ── Imágenes del dataset ─────────────────────────────────────────────
+# â”€â”€ ImÃ¡genes del dataset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 *.jpg
 *.jpeg
 *.png
@@ -25,46 +25,46 @@ features/
 *.tiff
 *.webp
 
-# ── CSVs pesados de resultados ───────────────────────────────────────
+# â”€â”€ CSVs pesados de resultados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 benchmark_results/
 predictions_*.csv
 
-# ── Modelos descargados ──────────────────────────────────────────────
+# â”€â”€ Modelos descargados â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 *.pth
 *.bin
 *.safetensors
 *.onnx
 *.pt
 
-# ── Caché de HuggingFace ─────────────────────────────────────────────
+# â”€â”€ CachÃ© de HuggingFace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 .cache/huggingface/
 ~/.cache/huggingface/
 
-# ── Jupyter ──────────────────────────────────────────────────────────
+# â”€â”€ Jupyter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 .ipynb_checkpoints/
 
-# ── IDEs ─────────────────────────────────────────────────────────────
+# â”€â”€ IDEs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 .vscode/
 .idea/
 
-# ── Sistema operativo ────────────────────────────────────────────────
+# â”€â”€ Sistema operativo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 .DS_Store
 Thumbs.db
 
-# ── Metadatos por imagen (huérfanos sin las imágenes correspondientes) ──
+# â”€â”€ Metadatos por imagen (huÃ©rfanos sin las imÃ¡genes correspondientes) â”€â”€
 02-benchmarking/data/fauna_seleccionada_bosque_atlantico/images/**/*.json
 
-# ── Logs de ejecución ────────────────────────────────────────────────
+# â”€â”€ Logs de ejecuciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 02-benchmarking/logs/
 
-# ── Reporte HTML generado (se regenera al final del proyecto) ────────
+# â”€â”€ Reporte HTML generado (se regenera al final del proyecto) â”€â”€â”€â”€â”€â”€â”€â”€
 02-benchmarking/data/reports/*.html
 
-# ── Figuras del reporte (figures/ y subcarpetas umaps/, errors/, ivc/) ──
+# â”€â”€ Figuras del reporte (figures/ y subcarpetas umaps/, errors/, ivc/) â”€â”€
 # PNG excluidos: 130 MB totales, reproducibles ejecutando
 #   scripts/06_generate_full_report.py con el venv del proyecto.
 # SVG trackeados: vectoriales y livianos (25.7 MB), escalables para
-#   presentación y embebibles en el reporte sin pérdida de calidad.
+#   presentaciÃ³n y embebibles en el reporte sin pÃ©rdida de calidad.
 02-benchmarking/data/reports/figures/*.png
 02-benchmarking/data/reports/figures/umaps/*.png
 02-benchmarking/data/reports/figures/errors/*.png
@@ -74,7 +74,7 @@ Thumbs.db
 !02-benchmarking/data/reports/figures/errors/*.svg
 !02-benchmarking/data/reports/figures/ivc/*.svg
 
-# ── Explícitamente trackeados (no ignorar) ───────────────────────────
+# â”€â”€ ExplÃ­citamente trackeados (no ignorar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 !Indice_Valor_Conservacion_Misiones.csv
 !dataset_index.csv
 !**/*.py
@@ -82,7 +82,10 @@ Thumbs.db
 0 3 - t h r e s h o l d - o p t i m i z a t i o n / d a t a / v a l i d a c i o n _ v i s u a l / 
 
 
-04-app/data/*.pkl 
+04-app/data/*.pkl
+04-app/data/last_session.json
  
-# ── Clips recortados por la app (generados en tiempo de ejecución) ────
+ 
+# â”€â”€ Clips recortados por la app (generados en tiempo de ejecuciÃ³n) â”€â”€â”€â”€
 04-app/SAREKO_clips/
+
