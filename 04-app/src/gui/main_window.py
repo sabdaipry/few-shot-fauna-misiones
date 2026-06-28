@@ -314,7 +314,7 @@ class MainWindow(QMainWindow):
         # Páginas de cada pestaña
         self._analisis_tab   = AnalisisTab()
         self._validacion_tab = ValidacionTab(species_catalog=_species_catalog)
-        self._evaluacion_tab = EvaluacionTab()
+        self._evaluacion_tab = EvaluacionTab(species_catalog=_species_catalog)
 
         self._stack.addWidget(self._analisis_tab)
         self._stack.addWidget(self._validacion_tab)
@@ -333,6 +333,9 @@ class MainWindow(QMainWindow):
         # Actualizar pestaña Evaluación al completar archivos o al validar
         self._analisis_tab.batch_changed.connect(self._update_evaluacion)
         self._validacion_tab.validation_changed.connect(self._update_evaluacion)
+
+        # Sincronizar validaciones hechas desde el panel lateral de Evaluación
+        self._evaluacion_tab.validation_changed.connect(self._on_evaluacion_validation)
 
         # Al terminar toda la corrida: acumular en historial
         self._analisis_tab.run_finished.connect(self._on_run_finished)
@@ -370,6 +373,19 @@ class MainWindow(QMainWindow):
         records = self._validacion_tab.get_records()
         summary = self._analisis_tab.get_batch_summary()
         self._evaluacion_tab.update_from_session(records, summary, SessionManager.load_history())
+
+    def _on_evaluacion_validation(self) -> None:
+        """
+        Una validación fue guardada desde el panel lateral de EvaluacionTab.
+
+        Los dicts de registros son compartidos por referencia entre ambas pestañas,
+        por lo que el cambio ya está en memoria. Sólo hay que:
+        1. Guardar la sesión en disco.
+        2. Refrescar la tabla de ValidacionTab para que refleje el estado actualizado.
+        """
+        self._save_session()
+        # restore_records reconstruye la tabla leyendo el estado actual de los dicts
+        self._validacion_tab.restore_records(self._validacion_tab.get_records())
 
     def closeEvent(self, event) -> None:
         self._save_session()

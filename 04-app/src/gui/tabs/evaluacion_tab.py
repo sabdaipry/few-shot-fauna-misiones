@@ -6,14 +6,19 @@ Estructura:
       ├── header_row              — dos cards lado a lado
       │     ├── _EvalHeaderCard   — breadcrumb, título
       │     └── _GlobalSummaryCard — métricas acumuladas
-      ├── _ErrorEvalCard          — 4 cards clicables + tabla expandible
-      └── _ChartsCard             — grid 2×2 (3 matplotlib + 1 texto)
+      └── body_row (QHBoxLayout)
+            ├── body_widget (QVBoxLayout)
+            │     ├── _ErrorEvalCard     — 4 cards clicables + tabla expandible (con "Ver detalle")
+            │     ├── _ChartsCard        — grid 2×2 (3 matplotlib + 1 texto)
+            │     └── _MultispeciesCard  — clips con multi_species=True (con "Ver detalle")
+            └── _SidePanel              — panel deslizable (importado de validacion_tab)
 """
 
 import csv
 import re
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -39,6 +44,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .validacion_tab import _SidePanel
 
 from ..styles import (
     ACCENT,
@@ -200,6 +207,37 @@ def _get_decisor(event) -> str:
 def _color_rgb(hex_color: str) -> tuple:
     h = hex_color.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _get_common_name(event) -> str:
+    """Retorna nombre común (es_ar > en) o nombre científico si no hay común."""
+    for attr in ("nombre_comun_es_ar", "nombre_comun_en"):
+        val = getattr(event, attr, "")
+        if val and str(val).lower() not in ("", "nan", "none"):
+            return str(val)
+    return getattr(event, "species", "—")
+
+
+def _action_btn(label: str, danger: bool = False) -> QPushButton:
+    bg_hover = "rgba(224,92,92,50)" if danger else "rgba(153,225,122,40)"
+    border   = "rgba(224,92,92,100)" if danger else "rgba(153,225,122,80)"
+    bg       = "rgba(224,92,92,20)"  if danger else "rgba(153,225,122,20)"
+    btn = QPushButton(label)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    btn.setFixedHeight(26)
+    btn.setStyleSheet(f"""
+        QPushButton {{
+            background: {bg};
+            color: {TEXT_PRIMARY};
+            border: 1px solid {border};
+            border-radius: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 0 10px;
+        }}
+        QPushButton:hover {{ background: {bg_hover}; }}
+    """)
+    return btn
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +408,8 @@ class _ErrorCategoryCard(QFrame):
 # ---------------------------------------------------------------------------
 
 class _ErrorDetailsTable(QFrame):
+    detail_requested = Signal(dict)   # record dict al hacer click en "Ver detalle"
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("errdetailstable")
@@ -405,11 +445,11 @@ class _ErrorDetailsTable(QFrame):
         layout.addLayout(hrow)
         layout.addWidget(_sep())
 
-        self._table = QTableWidget(0, 8)
+        self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESP. ESPERADA",
             "ESP. PREDICHA", "CONFIANZA", "DECISOR",
-            "TOP 5 CANDIDATOS", "ESPECIES ADICIONALES",
+            "TOP 5 CANDIDATOS", "ESPECIES ADICIONALES", "ACCIONES",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -420,10 +460,12 @@ class _ErrorDetailsTable(QFrame):
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 80)
         self._table.setColumnWidth(4, 100)
         self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(8, 110)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -505,6 +547,20 @@ class _ErrorDetailsTable(QFrame):
             it7 = QTableWidgetItem(extra_str)
             it7.setToolTip(extra_str)
             self._table.setItem(i, 7, it7)
+
+            # Col 8 — Acciones: Ver detalle
+            act_w = QWidget()
+            act_w.setStyleSheet("background: transparent;")
+            act_l = QHBoxLayout(act_w)
+            act_l.setContentsMargins(4, 2, 4, 2)
+            act_l.setSpacing(0)
+            btn_ver = _action_btn("Ver detalle")
+            btn_ver.clicked.connect(
+                lambda _=False, r=record: self.detail_requested.emit(r)
+            )
+            act_l.addWidget(btn_ver)
+            act_l.addStretch()
+            self._table.setCellWidget(i, 8, act_w)
 
     def _italic_cell(self, text: str) -> QWidget:
         w = QWidget()
@@ -590,6 +646,8 @@ class _ErrorDetailsTable(QFrame):
 # ---------------------------------------------------------------------------
 
 class _ErrorEvalCard(QFrame):
+    detail_requested = Signal(dict)   # propagado desde _ErrorDetailsTable
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("errorevalcard")
@@ -620,6 +678,7 @@ class _ErrorEvalCard(QFrame):
 
         # Tabla expandible
         self._details = _ErrorDetailsTable()
+        self._details.detail_requested.connect(self.detail_requested)
         layout.addWidget(self._details)
 
     def _on_category_clicked(self, key: str) -> None:
@@ -654,6 +713,206 @@ class _ErrorEvalCard(QFrame):
             self._details.show_category(
                 self._active_key, self._records_by_key[self._active_key]
             )
+
+
+# ---------------------------------------------------------------------------
+# Card de ancho completo — clips con múltiples especies
+# ---------------------------------------------------------------------------
+
+class _MultispeciesCard(QFrame):
+    """
+    Muestra todos los registros donde multi_species=True.
+    Emite detail_requested(record, global_idx) al pulsar 'Ver detalle'.
+    """
+
+    detail_requested = Signal(dict, int)   # record, índice en la lista global de records
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("multispeciescard")
+        self.setStyleSheet(card_qss("multispeciescard"))
+
+        self._records:     list[dict] = []   # sólo los multi_species=True
+        self._all_records: list[dict] = []   # referencia completa para calcular índice global
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
+
+        # ── Header ───────────────────────────────────────────────────────
+        hrow = QHBoxLayout()
+        hrow.setContentsMargins(0, 0, 0, 0)
+
+        sec = QLabel("CLIPS CON MÚLTIPLES ESPECIES")
+        sec.setStyleSheet(section_label_qss())
+        hrow.addWidget(sec)
+        hrow.addStretch()
+
+        self._btn_csv = _export_btn("Exportar CSV")
+        self._btn_csv.setEnabled(False)
+        self._btn_csv.clicked.connect(self._export_csv)
+        hrow.addWidget(self._btn_csv)
+
+        layout.addLayout(hrow)
+        layout.addWidget(_sep())
+
+        # ── Estado vacío ─────────────────────────────────────────────────
+        self._empty_lbl = QLabel("Sin clips con múltiples especies registrados")
+        self._empty_lbl.setStyleSheet(
+            f"color: {NEUTRAL}; font-size: 13px; font-style: italic;"
+            " background: transparent;"
+        )
+        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_lbl.setMinimumHeight(56)
+        layout.addWidget(self._empty_lbl)
+
+        # ── Tabla ─────────────────────────────────────────────────────────
+        self._table = QTableWidget(0, 6)
+        self._table.setHorizontalHeaderLabels([
+            "ARCHIVO", "INTERVALO", "ESPECIE PRINCIPAL",
+            "ESPECIES ADICIONALES", "DECISOR", "ACCIONES",
+        ])
+        hh = self._table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(0, 130)
+        self._table.setColumnWidth(1, 90)
+        self._table.setColumnWidth(4, 86)
+        self._table.setColumnWidth(5, 110)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._table.setStyleSheet(_table_qss())
+        self._table.setMinimumHeight(80)
+        self._table.setMaximumHeight(320)
+        self._table.hide()
+        layout.addWidget(self._table)
+
+    # ------------------------------------------------------------------
+
+    def update_data(self, records: list[dict]) -> None:
+        self._all_records = records
+        self._records = [r for r in records if r.get("multi_species")]
+        has = bool(self._records)
+        self._empty_lbl.setVisible(not has)
+        self._table.setVisible(has)
+        self._btn_csv.setEnabled(has)
+        if has:
+            self._rebuild()
+
+    def _rebuild(self) -> None:
+        self._table.setRowCount(0)
+        for i, record in enumerate(self._records):
+            event = record["event"]
+            self._table.insertRow(i)
+            self._table.setRowHeight(i, 46)
+
+            # Col 0 — Archivo
+            it0 = QTableWidgetItem(record["filename"])
+            it0.setToolTip(record["filename"])
+            self._table.setItem(i, 0, it0)
+
+            # Col 1 — Intervalo
+            st = getattr(event, "start_time", None)
+            et = getattr(event, "end_time", None)
+            ivl = (
+                f"{_fmt_time(st)} – {_fmt_time(et)}"
+                if st is not None and et is not None else "—"
+            )
+            it1 = QTableWidgetItem(ivl)
+            it1.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 1, it1)
+
+            # Col 2 — Especie principal: nombre común + nombre científico en itálica
+            common   = _get_common_name(event)
+            sci_name = getattr(event, "species", "—")
+            cell_w   = QWidget()
+            cell_w.setStyleSheet("background: transparent;")
+            cell_l   = QVBoxLayout(cell_w)
+            cell_l.setContentsMargins(8, 3, 8, 3)
+            cell_l.setSpacing(1)
+            lbl_common = QLabel(common)
+            lbl_common.setStyleSheet(
+                f"color: {TEXT_PRIMARY}; font-size: 12px; background: transparent;"
+            )
+            lbl_sci = QLabel(sci_name)
+            lbl_sci.setStyleSheet(
+                f"color: {ACCENT}; font-size: 10px; font-style: italic;"
+                " background: transparent;"
+            )
+            cell_l.addWidget(lbl_common)
+            cell_l.addWidget(lbl_sci)
+            self._table.setCellWidget(i, 2, cell_w)
+
+            # Col 3 — Especies adicionales
+            extra     = record.get("extra_species", [])
+            extra_str = ", ".join(extra) if extra else "—"
+            it3 = QTableWidgetItem(extra_str)
+            it3.setToolTip(extra_str)
+            self._table.setItem(i, 3, it3)
+
+            # Col 4 — Decisor
+            it4 = QTableWidgetItem(_get_decisor(event))
+            it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 4, it4)
+
+            # Col 5 — Acciones: Ver detalle
+            act_w = QWidget()
+            act_w.setStyleSheet("background: transparent;")
+            act_l = QHBoxLayout(act_w)
+            act_l.setContentsMargins(4, 2, 4, 2)
+            act_l.setSpacing(0)
+            btn_ver = _action_btn("Ver detalle")
+            try:
+                global_idx = self._all_records.index(record)
+            except ValueError:
+                global_idx = -1
+            btn_ver.clicked.connect(
+                lambda _=False, r=record, gi=global_idx: self.detail_requested.emit(r, gi)
+            )
+            act_l.addWidget(btn_ver)
+            act_l.addStretch()
+            self._table.setCellWidget(i, 5, act_w)
+
+    # ------------------------------------------------------------------
+    # Exportación
+
+    def _export_csv(self) -> None:
+        if not self._records:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar CSV", "sareko_multi_especies.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        rows = []
+        for rec in self._records:
+            ev  = rec["event"]
+            st  = getattr(ev, "start_time", None)
+            et  = getattr(ev, "end_time", None)
+            ivl = (
+                f"{_fmt_time(st)} – {_fmt_time(et)}"
+                if st is not None and et is not None else "—"
+            )
+            rows.append({
+                "archivo":              rec["filename"],
+                "intervalo":            ivl,
+                "especie_principal":    getattr(ev, "species", "—"),
+                "nombre_comun":         _get_common_name(ev),
+                "especies_adicionales": ", ".join(rec.get("extra_species", [])),
+                "decisor":              _get_decisor(ev),
+            })
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -1028,12 +1287,22 @@ class EvaluacionTab(QWidget):
     Pestaña Evaluación completa de SAREKO.
 
     API pública:
-        update_from_session(records, batch_summary)
+        update_from_session(records, batch_summary, history=None)
             — recibe los datos de la sesión y actualiza todos los indicadores.
+
+    Señales:
+        validation_changed — emitida al guardar una validación desde el panel lateral.
     """
 
-    def __init__(self, parent=None):
+    validation_changed = Signal()
+
+    def __init__(self, species_catalog: "list | None" = None, parent=None):
         super().__init__(parent)
+        self._species_catalog  = species_catalog or []
+        self._current_records: list[dict] = []
+        self._panel_open    = False
+        self._panel_row_idx = -1
+
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setStyleSheet("background: transparent;")
 
@@ -1041,7 +1310,7 @@ class EvaluacionTab(QWidget):
         outer.setContentsMargins(32, 24, 32, 32)
         outer.setSpacing(16)
 
-        # Header — dos cards lado a lado
+        # ── Header — dos cards lado a lado ────────────────────────────────
         header_row = QHBoxLayout()
         header_row.setSpacing(16)
         self._header_card  = _EvalHeaderCard()
@@ -1050,25 +1319,83 @@ class EvaluacionTab(QWidget):
         header_row.addWidget(self._summary_card, 2)
         outer.addLayout(header_row)
 
-        # Card de evaluación de errores
-        self._error_card = _ErrorEvalCard()
-        outer.addWidget(self._error_card)
+        # ── Fila cuerpo: columna de contenido + panel lateral ─────────────
+        body_row = QHBoxLayout()
+        body_row.setSpacing(12)
+        body_row.setContentsMargins(0, 0, 0, 0)
 
-        # Gráficos
+        # Wrapper de la columna de contenido (necesario para QHBoxLayout)
+        body_widget = QWidget()
+        body_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        body_widget.setStyleSheet("background: transparent;")
+        body_col = QVBoxLayout(body_widget)
+        body_col.setContentsMargins(0, 0, 0, 0)
+        body_col.setSpacing(16)
+
+        # Cards de contenido
+        self._error_card  = _ErrorEvalCard()
         self._charts_card = _ChartsCard()
-        outer.addWidget(self._charts_card)
-
-        # Estado vacío
+        self._multi_card  = _MultispeciesCard()
         self._empty_state = _EmptyState()
-        outer.addWidget(self._empty_state)
 
-        outer.addStretch()
+        body_col.addWidget(self._error_card)
+        body_col.addWidget(self._charts_card)
+        body_col.addWidget(self._multi_card)
+        body_col.addWidget(self._empty_state)
+        body_col.addStretch()
 
-        # Arrancar sin datos
+        # Panel lateral deslizable (reutilizado de ValidacionTab)
+        self._panel = _SidePanel(self._species_catalog)
+
+        body_row.addWidget(body_widget, 1)
+        body_row.addWidget(self._panel)
+        outer.addLayout(body_row)
+
+        # ── Estado inicial (sin datos) ────────────────────────────────────
         self._error_card.hide()
         self._charts_card.hide()
+        self._multi_card.hide()
+
+        # ── Conexiones de señales ─────────────────────────────────────────
+        self._error_card.detail_requested.connect(self._on_error_detail_requested)
+        self._multi_card.detail_requested.connect(self._open_panel)
+        self._panel.closed.connect(self._on_panel_closed)
+        self._panel.validation_saved.connect(self._on_panel_validation_saved)
+        self._panel.multi_species_changed.connect(self._on_multi_species_changed)
 
     # ------------------------------------------------------------------
+    # Gestión del panel lateral
+
+    def _open_panel(self, record: dict, global_idx: int = -1) -> None:
+        self._panel_row_idx = global_idx
+        self._panel.load_record(record, global_idx)
+        if not self._panel_open:
+            self._panel.open_panel()
+            self._panel_open = True
+
+    def _on_panel_closed(self) -> None:
+        self._panel_open    = False
+        self._panel_row_idx = -1
+
+    def _on_panel_validation_saved(self, row_idx: int, category: str, species: str) -> None:
+        """El panel guardó una validación — propagar hacia MainWindow."""
+        self.validation_changed.emit()
+
+    def _on_multi_species_changed(self, global_idx: int, species_list: list) -> None:
+        """El panel modificó las especies adicionales — refrescar card multiespecie."""
+        self._multi_card.update_data(self._current_records)
+        self.validation_changed.emit()
+
+    def _on_error_detail_requested(self, record: dict) -> None:
+        """'Ver detalle' en la tabla de errores — buscar índice global y abrir panel."""
+        try:
+            global_idx = self._current_records.index(record)
+        except ValueError:
+            global_idx = -1
+        self._open_panel(record, global_idx)
+
+    # ------------------------------------------------------------------
+    # API pública
 
     def update_from_session(
         self,
@@ -1077,9 +1404,11 @@ class EvaluacionTab(QWidget):
         history: "dict | None" = None,
     ) -> None:
         """Actualiza todos los indicadores, cards y gráficos."""
+        self._current_records = records
+
         if history:
-            n_corridas     = history.get("total_runs",       0)
-            n_registros    = history.get("total_records",    0)
+            n_corridas     = history.get("total_runs",        0)
+            n_registros    = history.get("total_records",     0)
             n_validaciones = history.get("total_validations", 0)
         else:
             n_corridas     = len(batch_summary.get("files", []))
@@ -1089,12 +1418,17 @@ class EvaluacionTab(QWidget):
                 if r.get("validation", {}).get("state") == "validated"
             )
 
-        session_records  = len(records)
-        session_files    = len(batch_summary.get("files", []))
-        has_data = n_registros > 0 or n_corridas > 0 or session_records > 0 or session_files > 0
+        session_records = len(records)
+        session_files   = len(batch_summary.get("files", []))
+        has_data = (
+            n_registros > 0 or n_corridas > 0
+            or session_records > 0 or session_files > 0
+        )
+
         self._empty_state.setVisible(not has_data)
         self._error_card.setVisible(has_data)
         self._charts_card.setVisible(has_data)
+        self._multi_card.setVisible(has_data)
 
         if not has_data:
             self._summary_card.reset()
@@ -1103,3 +1437,4 @@ class EvaluacionTab(QWidget):
         self._summary_card.update_metrics(n_corridas, n_registros, n_validaciones)
         self._error_card.update_data(records)
         self._charts_card.update_data(records, batch_summary, history)
+        self._multi_card.update_data(records)
