@@ -25,11 +25,12 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -644,18 +645,17 @@ class _ValidationCell(QWidget):
         custom = None
 
         if text == "Ingreso manual...":
-            dlg = QInputDialog(self)
-            dlg.setInputMode(QInputDialog.InputMode.TextInput)
-            dlg.setWindowTitle("Ingreso manual")
-            dlg.setLabelText("Nombre de la especie:")
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Ingresar especie manualmente")
             dlg.setStyleSheet("""
-                QDialog {
-                    background-color: #1a1a1a;
+                QDialog { background-color: #1a1a1a; color: #edefec; }
+                QLabel { color: #edefec; }
+                QLineEdit {
+                    background-color: #0d0d0d;
                     color: #edefec;
-                }
-                QDialog QLabel {
-                    color: #edefec;
-                    background: transparent;
+                    border: 1px solid #99e17a;
+                    border-radius: 6px;
+                    padding: 4px 8px;
                 }
                 QPushButton {
                     background-color: #1f2c1d;
@@ -667,23 +667,18 @@ class _ValidationCell(QWidget):
                 }
                 QPushButton:hover { background-color: #2d3f2a; }
             """)
-            le = dlg.lineEdit()
-            if le:
-                le.setStyleSheet("""
-                    QLineEdit {
-                        background-color: #1a1a1a;
-                        color: #edefec;
-                        border: 1px solid #99e17a;
-                        border-radius: 6px;
-                        padding: 4px 8px;
-                    }
-                """)
-            if not dlg.exec():
+            dlg_layout = QVBoxLayout(dlg)
+            dlg_layout.addWidget(QLabel("Nombre científico de la especie:"))
+            le = QLineEdit()
+            dlg_layout.addWidget(le)
+            btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            btns.accepted.connect(dlg.accept)
+            btns.rejected.connect(dlg.reject)
+            dlg_layout.addWidget(btns)
+            if dlg.exec() != QDialog.DialogCode.Accepted or not le.text().strip():
                 return
-            custom = dlg.textValue().strip()
-            if not custom:
-                return
-            category  = f"Conocida — {custom}"
+            custom = le.text().strip()
+            category = f"Conocida — {custom}"
         elif 1 <= idx <= len(top5):
             # idx 1 → top-1 = "Correcta"; idx 2-5 → "Top 5"
             category = "Correcta" if idx == 1 else "Top 5"
@@ -747,6 +742,7 @@ class _SidePanel(QFrame):
         self.setMaximumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
 
+        self._anim: Optional[QPropertyAnimation] = None
         self._anim = QPropertyAnimation(self, b"maximumWidth")
         self._anim.setDuration(260)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -989,12 +985,17 @@ class _SidePanel(QFrame):
     # ------------------------------------------------------------------
 
     def open_panel(self) -> None:
+        if self._anim is None:
+            return
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(PANEL_WIDTH)
         self._anim.start()
 
     def close_panel(self) -> None:
+        if self._anim is None:
+            self.closed.emit()
+            return
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(0)
