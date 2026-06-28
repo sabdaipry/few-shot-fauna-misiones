@@ -1339,8 +1339,8 @@ class EvaluacionTab(QWidget):
         self._empty_state = _EmptyState()
 
         body_col.addWidget(self._error_card)
-        body_col.addWidget(self._charts_card)
         body_col.addWidget(self._multi_card)
+        body_col.addWidget(self._charts_card)
         body_col.addWidget(self._empty_state)
         body_col.addStretch()
 

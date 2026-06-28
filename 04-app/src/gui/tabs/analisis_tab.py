@@ -1307,13 +1307,17 @@ class AnalisisTab(QWidget):
         files = []
         for name, row in self._batch._rows.items():
             path = row.get("path")
+            meta = row.get("meta") or {}
             files.append({
-                "name":        name,
-                "path":        str(path) if path else None,
-                "state":       row["state"],
-                "pct":         row["pct"],
-                "error_msg":   row.get("error_msg", ""),
-                "error_stage": row.get("error_stage", ""),
+                "name":             name,
+                "path":             str(path) if path else None,
+                "state":            row["state"],
+                "pct":              row["pct"],
+                "error_msg":        row.get("error_msg", ""),
+                "error_stage":      row.get("error_stage", ""),
+                "duration_sec":     meta.get("duration_sec"),
+                "processing_sec":   meta.get("processing_sec"),
+                "frames_processed": meta.get("frames_processed"),
             })
         return {
             "files":        files,
@@ -1347,7 +1351,8 @@ class AnalisisTab(QWidget):
             name  = fd["name"]
             state = fd["state"]
             if state == "completado":
-                self._batch.on_file_completed(name, events_by_file.get(name, []))
+                meta = {k: fd.get(k) for k in ("duration_sec", "processing_sec", "frames_processed")}
+                self._batch.on_file_completed(name, events_by_file.get(name, []), meta)
                 n_completed += 1
             elif state in ("error", "procesando"):
                 has_error = True
