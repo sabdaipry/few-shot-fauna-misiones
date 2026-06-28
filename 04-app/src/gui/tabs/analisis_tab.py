@@ -890,6 +890,11 @@ class _BatchCard(QFrame):
                 padding: 0 10px;
             }}
             QPushButton:hover {{ background: rgba(153,225,122,40); }}
+            QPushButton:disabled {{
+                background: rgba(74,82,72,20);
+                color: rgba(237,239,236,40);
+                border-color: rgba(74,82,72,50);
+            }}
         """)
         btn_ver.clicked.connect(lambda: self._toggle_detail(name))
 
@@ -914,7 +919,7 @@ class _BatchCard(QFrame):
         hl.addWidget(btn_ver)
         hl.addWidget(btn_resume)
         hl.addStretch()
-        return w, btn_resume
+        return w, btn_resume, btn_ver
 
     # ── API pública ──────────────────────────────────────────────────────
 
@@ -955,7 +960,8 @@ class _BatchCard(QFrame):
             self._table.setItem(r, 4, QTableWidgetItem("—"))
 
             # Col 5 — Acciones
-            act_w, btn_resume = self._mk_actions_cell(name)
+            act_w, btn_resume, btn_ver = self._mk_actions_cell(name)
+            btn_ver.setEnabled(False)
             self._table.setCellWidget(r, 5, act_w)
 
             self._rows[name] = {
@@ -964,6 +970,7 @@ class _BatchCard(QFrame):
                 "prog_bar":    prog_bar,
                 "prog_lbl":    prog_lbl,
                 "btn_resume":  btn_resume,
+                "btn_ver":     btn_ver,
                 "state":       "en cola",
                 "pct":         0,
                 "events":      [],
@@ -982,6 +989,7 @@ class _BatchCard(QFrame):
         row["pct"]   = 0
         self._update_badge(name, "procesando")
         self._update_progress(name, 0)
+        row["btn_ver"].setEnabled(False)
 
     def on_stage_updated(self, stage: str, pct: int) -> None:
         self._current_stage = stage
@@ -1002,6 +1010,7 @@ class _BatchCard(QFrame):
         row["pct"]    = 100
         self._update_badge(name, "completado")
         self._update_progress(name, 100)
+        row["btn_ver"].setEnabled(True)
 
         # Columna Especies: cuenta de especies únicas
         species = sorted({
@@ -1035,6 +1044,7 @@ class _BatchCard(QFrame):
         row["error_msg"]   = msg
         row["error_stage"] = self._current_stage or "desconocida"
         self._update_badge(name, "error")
+        row["btn_ver"].setEnabled(True)
         row["btn_resume"].setVisible(True)
         self._table.item(row["row_idx"], 4).setText(f"Error: {msg[:60]}")
         if self._detail_target == name:
@@ -1051,6 +1061,7 @@ class _BatchCard(QFrame):
         row["error_stage"] = stage or "desconocida"
         self._update_badge(name, "error")
         self._update_progress(name, pct)
+        row["btn_ver"].setEnabled(True)
         row["btn_resume"].setVisible(True)
         item = self._table.item(row["row_idx"], 4)
         if item:
@@ -1059,23 +1070,46 @@ class _BatchCard(QFrame):
     # ── Slots internos ───────────────────────────────────────────────────
 
     def _on_detail_closed(self) -> None:
+        if self._detail_target:
+            self._highlight_row(self._detail_target, False)
         self._detail_target = ""
 
     def _toggle_detail(self, name: str) -> None:
-        if self._detail_target == name and self._detail.isVisible():
+        old_target = self._detail_target
+        if old_target == name and self._detail.isVisible():
             self._detail.hide()
             self._detail_target = ""
+            self._highlight_row(old_target, False)
             return
+        if old_target:
+            self._highlight_row(old_target, False)
         self._detail_target = name
         row = self._rows.get(name)
         if not row:
+            self._detail_target = ""
             return
+        shown = False
         if row["state"] == "completado":
             self._detail.show_completed(name, row["events"], row.get("meta"))
+            shown = True
         elif row["state"] == "error":
             self._detail.show_error(
                 name, row["error_stage"], row["error_msg"], row["pct"]
             )
+            shown = True
+        if shown:
+            self._highlight_row(name, True)
+        else:
+            self._detail_target = ""
+
+    def _highlight_row(self, name: str, active: bool) -> None:
+        row = self._rows.get(name)
+        if not row:
+            return
+        if active:
+            self._table.selectRow(row["row_idx"])
+        else:
+            self._table.clearSelection()
 
     def _update_badge(self, name: str, state: str) -> None:
         lbl = self._rows[name]["badge_lbl"]

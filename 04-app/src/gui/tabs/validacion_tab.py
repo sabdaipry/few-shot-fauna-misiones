@@ -644,12 +644,45 @@ class _ValidationCell(QWidget):
         custom = None
 
         if text == "Ingreso manual...":
-            species, ok = QInputDialog.getText(
-                self, "Ingreso manual", "Nombre de la especie:"
-            )
-            if not ok or not species.strip():
+            dlg = QInputDialog(self)
+            dlg.setInputMode(QInputDialog.InputMode.TextInput)
+            dlg.setWindowTitle("Ingreso manual")
+            dlg.setLabelText("Nombre de la especie:")
+            dlg.setStyleSheet("""
+                QDialog {
+                    background-color: #1a1a1a;
+                    color: #edefec;
+                }
+                QDialog QLabel {
+                    color: #edefec;
+                    background: transparent;
+                }
+                QPushButton {
+                    background-color: #1f2c1d;
+                    color: #99e17a;
+                    border: 1px solid #99e17a;
+                    border-radius: 6px;
+                    padding: 4px 12px;
+                    min-width: 60px;
+                }
+                QPushButton:hover { background-color: #2d3f2a; }
+            """)
+            le = dlg.lineEdit()
+            if le:
+                le.setStyleSheet("""
+                    QLineEdit {
+                        background-color: #1a1a1a;
+                        color: #edefec;
+                        border: 1px solid #99e17a;
+                        border-radius: 6px;
+                        padding: 4px 8px;
+                    }
+                """)
+            if not dlg.exec():
                 return
-            custom    = species.strip()
+            custom = dlg.textValue().strip()
+            if not custom:
+                return
             category  = f"Conocida — {custom}"
         elif 1 <= idx <= len(top5):
             # idx 1 → top-1 = "Correcta"; idx 2-5 → "Top 5"
@@ -774,6 +807,23 @@ class _SidePanel(QFrame):
         title_row.addWidget(btn_close)
         self._layout.addLayout(title_row)
         self._layout.addWidget(_sep())
+
+        # ── Nombre común y científico (especie asignada por pipeline) ────
+        self._lbl_common_name = QLabel("—")
+        self._lbl_common_name.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 17px; font-weight: 700;"
+            " background: transparent;"
+        )
+        self._lbl_common_name.setWordWrap(True)
+        self._layout.addWidget(self._lbl_common_name)
+
+        self._lbl_scientific_name = QLabel("—")
+        self._lbl_scientific_name.setStyleSheet(
+            f"color: {ACCENT}; font-size: 12px; font-style: italic;"
+            " background: transparent;"
+        )
+        self._lbl_scientific_name.setWordWrap(True)
+        self._layout.addWidget(self._lbl_scientific_name)
 
         # ── Frame representativo ─────────────────────────────────────────
         self._frame_lbl = QLabel()
@@ -965,6 +1015,10 @@ class _SidePanel(QFrame):
         # Título
         self._title_lbl.setText(record["filename"].upper())
 
+        # Nombre común y científico
+        self._lbl_common_name.setText(_get_common_name(event))
+        self._lbl_scientific_name.setText(getattr(event, "species", "—"))
+
         # Frame representativo
         pixmap = None
         frame_idx = getattr(event, "representative_frame_idx", None)
@@ -1104,10 +1158,21 @@ class _SidePanel(QFrame):
                 raise RuntimeError("clip vacío")
             os.startfile(str(clip_path))
         except Exception:
-            QMessageBox.warning(
-                self, "Aviso",
-                "No se pudo recortar el clip. Se abrirá el video completo.",
-            )
+            _msg = QMessageBox(self)
+            _msg.setWindowTitle("Aviso")
+            _msg.setText("No se pudo recortar el clip. Se abrirá el video completo.")
+            _msg.setIcon(QMessageBox.Icon.Warning)
+            _msg.setStyleSheet("""
+                QMessageBox { background-color: #1a1a1a; color: #edefec; }
+                QMessageBox QLabel { color: #edefec; }
+                QPushButton {
+                    background-color: #1f2c1d; color: #99e17a;
+                    border: 1px solid #99e17a; border-radius: 6px;
+                    padding: 4px 12px; min-width: 60px;
+                }
+                QPushButton:hover { background-color: #2d3f2a; }
+            """)
+            _msg.exec()
             try:
                 os.startfile(str(filepath))
             except Exception:
@@ -1215,6 +1280,7 @@ class _RegistrosSection(QFrame):
         self._total_pages = 0
         self._open_detail_record: Optional[dict] = None
         self._val_cells: dict[int, _ValidationCell] = {}
+        self._active_global_idx: int = -1
 
     # ── Navigation helpers ────────────────────────────────────────────────
 
@@ -1355,6 +1421,9 @@ class _RegistrosSection(QFrame):
             act_l.addStretch()
             self._table.setCellWidget(local_idx, 7, act_w)
 
+            if global_idx == self._active_global_idx:
+                self._table.selectRow(local_idx)
+
         # Paginación
         total = len(self._filtered)
         tp    = max(1, -(-total // PAGE_SIZE))
@@ -1369,14 +1438,33 @@ class _RegistrosSection(QFrame):
         if cell:
             cell.set_validated(category, species)
 
+    def set_active_row(self, global_idx: int) -> None:
+        self._active_global_idx = global_idx
+        self._rebuild_table()
+
+    def clear_active_row(self) -> None:
+        self._active_global_idx = -1
+        self._rebuild_table()
+
     def _confirm_delete(self, global_idx: int) -> None:
-        reply = QMessageBox.question(
-            self, "Eliminar registro",
-            "¿Eliminar este evento de la lista? Esta acción no se puede deshacer.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Eliminar registro")
+        msg.setText("¿Eliminar este evento de la lista? Esta acción no se puede deshacer.")
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        if reply == QMessageBox.StandardButton.Yes:
+        msg.setDefaultButton(QMessageBox.StandardButton.No)
+        msg.setStyleSheet("""
+            QMessageBox { background-color: #1a1a1a; color: #edefec; }
+            QMessageBox QLabel { color: #edefec; }
+            QPushButton {
+                background-color: #1f2c1d; color: #99e17a;
+                border: 1px solid #99e17a; border-radius: 6px;
+                padding: 4px 12px; min-width: 60px;
+            }
+            QPushButton:hover { background-color: #2d3f2a; }
+        """)
+        if msg.exec() == QMessageBox.StandardButton.Yes:
             self.delete_requested.emit(global_idx)
 
     # ── Exportación ───────────────────────────────────────────────────────
@@ -1578,6 +1666,7 @@ class ValidacionTab(QWidget):
     def _open_panel(self, record: dict, global_idx: int = -1) -> None:
         self._panel_row_idx = global_idx
         self._panel.load_record(record, global_idx)
+        self._registros.set_active_row(global_idx)
         if not self._panel_open:
             self._panel.open_panel()
             self._panel_open = True
@@ -1585,6 +1674,7 @@ class ValidacionTab(QWidget):
     def _on_panel_closed(self) -> None:
         self._panel_open    = False
         self._panel_row_idx = -1
+        self._registros.clear_active_row()
 
     def _on_panel_validation_saved(self, row_idx: int, category: str, species: str) -> None:
         self._registros.update_table_cell_validation(row_idx, category, species)
