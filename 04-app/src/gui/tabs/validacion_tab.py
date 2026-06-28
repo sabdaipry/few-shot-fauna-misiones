@@ -908,7 +908,7 @@ class _SidePanel(QFrame):
         self._anim.setEndValue(0)
         try:
             self._anim.finished.disconnect()
-        except RuntimeError:
+        except (RuntimeError, TypeError):
             pass
         self._anim.finished.connect(lambda: self.closed.emit())
         self._anim.start()
