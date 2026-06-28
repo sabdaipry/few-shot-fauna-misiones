@@ -14,7 +14,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread
 
-_SESSION_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "last_session.json"
+_SESSION_PATH  = Path(__file__).resolve().parent.parent.parent / "data" / "last_session.json"
+_HISTORY_PATH  = Path(__file__).resolve().parent.parent.parent / "data" / "history.json"
 
 
 class _SaveWorker(QThread):
@@ -46,9 +47,10 @@ def _event_from_dict(d: dict) -> types.SimpleNamespace:
 
 
 class SessionManager:
-    """Gestiona la sesión persistente en 04-app/data/last_session.json."""
+    """Gestiona la sesión persistente y el historial acumulado en 04-app/data/."""
 
-    _worker: "_SaveWorker | None" = None
+    _worker:         "_SaveWorker | None" = None
+    _history_worker: "_SaveWorker | None" = None
 
     @classmethod
     def save(cls, events: list[dict], batch_summary: dict) -> None:
@@ -122,3 +124,84 @@ class SessionManager:
             _SESSION_PATH.unlink(missing_ok=True)
         except Exception:
             pass
+
+    # ------------------------------------------------------------------
+    # Historial acumulado (history.json)
+
+    @classmethod
+    def load_history(cls) -> dict:
+        """Carga history.json. Devuelve dict vacío si no existe o está corrupto."""
+        if not _HISTORY_PATH.exists():
+            return {}
+        try:
+            data = json.loads(_HISTORY_PATH.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return {}
+            return data
+        except Exception:
+            return {}
+
+    @classmethod
+    def save_history(cls, history: dict) -> None:
+        """Escribe history.json en background."""
+        try:
+            content = json.dumps(history, ensure_ascii=False, default=str)
+        except Exception:
+            return
+        if cls._history_worker and cls._history_worker.isRunning():
+            cls._history_worker.wait(500)
+        cls._history_worker = _SaveWorker(_HISTORY_PATH, content)
+        cls._history_worker.start()
+
+    @classmethod
+    def append_history(cls, batch_summary: dict, records: list[dict]) -> dict:
+        """Acumula los datos de una corrida completada en history.json.
+
+        Devuelve el historial actualizado (ya incluye la corrida actual)
+        para que el llamador pueda usarlo sin esperar la escritura a disco.
+        """
+        history = cls.load_history()
+
+        history.setdefault("total_runs",        0)
+        history.setdefault("total_frames",       0)
+        history.setdefault("total_records",      0)
+        history.setdefault("total_validations",  0)
+        history.setdefault("runs",               [])
+        history.setdefault("species_counts",     {})
+        history.setdefault("confidence_counts",  {"alta": 0, "baja": 0, "ambiguo": 0})
+
+        history["total_runs"]       += 1
+        history["total_frames"]     += batch_summary.get("total_frames", 0)
+        history["total_records"]    += len(records)
+        history["total_validations"] += sum(
+            1 for r in records
+            if r.get("validation", {}).get("state") == "validated"
+        )
+
+        files     = batch_summary.get("files", [])
+        has_error = any(f.get("state") == "error" for f in files)
+        history["runs"].append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "mode":      batch_summary.get("mode", "—"),
+            "files":     [f.get("name", "?") for f in files],
+            "state":     "error" if has_error else "completado",
+        })
+
+        sp_counts   = history["species_counts"]
+        conf_counts = history["confidence_counts"]
+        for r in records:
+            event = r.get("event")
+            sp    = getattr(event, "species", "") if event is not None else ""
+            if sp:
+                sp_counts[sp] = sp_counts.get(sp, 0) + 1
+            if event is None:
+                continue
+            if getattr(event, "ambiguous", False):
+                conf_counts["ambiguo"] = conf_counts.get("ambiguo", 0) + 1
+            elif getattr(event, "confidence_level", "") == "alta":
+                conf_counts["alta"] = conf_counts.get("alta", 0) + 1
+            else:
+                conf_counts["baja"] = conf_counts.get("baja", 0) + 1
+
+        cls.save_history(history)
+        return history

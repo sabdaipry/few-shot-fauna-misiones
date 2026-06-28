@@ -5,11 +5,11 @@ Estructura:
     MainWindow
       └── _BackgroundWidget  (dibuja fondo.png escalado a cover)
            └── QVBoxLayout
-                ├── _NavBar     (fijo, 64 px)
+                ├── _NavBar       (fijo, 64 px)
                 └── QScrollArea → QStackedWidget
-                     ├── _PlaceholderTab  "Análisis"
-                     ├── _PlaceholderTab  "Validación"
-                     └── _PlaceholderTab  "Evaluación"
+                     ├── AnalisisTab
+                     ├── ValidacionTab
+                     └── EvaluacionTab
 """
 
 from pathlib import Path
@@ -41,6 +41,7 @@ from .styles import (
     title_qss,
 )
 from .tabs.analisis_tab import AnalisisTab
+from .tabs.evaluacion_tab import EvaluacionTab
 from .tabs.validacion_tab import ValidacionTab
 from ..data.session import SessionManager
 
@@ -284,14 +285,11 @@ class MainWindow(QMainWindow):
         # Páginas de cada pestaña
         self._analisis_tab   = AnalisisTab()
         self._validacion_tab = ValidacionTab()
+        self._evaluacion_tab = EvaluacionTab()
 
         self._stack.addWidget(self._analisis_tab)
         self._stack.addWidget(self._validacion_tab)
-
-        # Pestaña Evaluación — placeholder hasta la próxima sesión
-        self._stack.addWidget(
-            _PlaceholderTab(_TAB_LABELS[2], _TAB_BREADCRUMBS[2], _TAB_SUBTITLES[2])
-        )
+        self._stack.addWidget(self._evaluacion_tab)
 
         # Conectar navbar → stack
         self._navbar.tab_selected.connect(self._stack.setCurrentIndex)
@@ -302,6 +300,13 @@ class MainWindow(QMainWindow):
         # Persistencia de sesión: guardar al completar cada archivo y al validar
         self._analisis_tab.batch_changed.connect(self._save_session)
         self._validacion_tab.validation_changed.connect(self._save_session)
+
+        # Actualizar pestaña Evaluación al completar archivos o al validar
+        self._analisis_tab.batch_changed.connect(self._update_evaluacion)
+        self._validacion_tab.validation_changed.connect(self._update_evaluacion)
+
+        # Al terminar toda la corrida: acumular en historial
+        self._analisis_tab.run_finished.connect(self._on_run_finished)
 
         # Restaurar sesión previa si existe
         self._restore_session()
@@ -317,6 +322,12 @@ class MainWindow(QMainWindow):
         summary = self._analisis_tab.get_batch_summary()
         SessionManager.save(records, summary)
 
+    def _on_run_finished(self) -> None:
+        records = self._validacion_tab.get_records()
+        summary = self._analisis_tab.get_batch_summary()
+        history = SessionManager.append_history(summary, records)
+        self._evaluacion_tab.update_from_session(records, summary, history)
+
     def _restore_session(self) -> None:
         result = SessionManager.load()
         if result is None:
@@ -324,6 +335,12 @@ class MainWindow(QMainWindow):
         records, summary = result
         self._validacion_tab.restore_records(records)
         self._analisis_tab.restore_batch(summary, records)
+        self._evaluacion_tab.update_from_session(records, summary, SessionManager.load_history())
+
+    def _update_evaluacion(self) -> None:
+        records = self._validacion_tab.get_records()
+        summary = self._analisis_tab.get_batch_summary()
+        self._evaluacion_tab.update_from_session(records, summary, SessionManager.load_history())
 
     def closeEvent(self, event) -> None:
         self._save_session()

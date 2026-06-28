@@ -84,6 +84,7 @@ Thumbs.db
 
 04-app/data/*.pkl
 04-app/data/last_session.json
+04-app/data/history.json
  
  
 # â”€â”€ Clips recortados por la app (generados en tiempo de ejecuciÃ³n) â”€â”€â”€â”€
