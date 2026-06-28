@@ -173,6 +173,7 @@ class SessionManager:
         history.setdefault("runs",               [])
         history.setdefault("species_counts",     {})
         history.setdefault("confidence_counts",  {"alta": 0, "baja": 0, "ambiguo": 0})
+        history.setdefault("latency_records",    [])
 
         history["total_runs"]       += 1
         history["total_frames"]     += batch_summary.get("total_frames", 0)
@@ -206,6 +207,24 @@ class SessionManager:
                 conf_counts["alta"] = conf_counts.get("alta", 0) + 1
             else:
                 conf_counts["baja"] = conf_counts.get("baja", 0) + 1
+
+        # Acumular latency records por cada archivo completado de esta corrida
+        mode = batch_summary.get("mode", "—")
+        for f in files:
+            if f.get("state") != "completado":
+                continue
+            proc_sec = f.get("processing_sec")
+            if proc_sec is None:
+                continue
+            dur_sec = f.get("duration_sec")
+            history["latency_records"].append({
+                "filename":         f.get("name", ""),
+                "type":             "video" if dur_sec is not None else "imagen",
+                "duration_sec":     dur_sec,
+                "mode":             mode,
+                "frames_processed": f.get("frames_processed"),
+                "processing_sec":   float(proc_sec),
+            })
 
         cls.save_history(history)
         return history

@@ -1369,6 +1369,10 @@ class AnalisisTab(QWidget):
 
     # ------------------------------------------------------------------
 
+    def current_mode(self) -> str:
+        """Devuelve el nombre del modo de análisis actualmente seleccionado."""
+        return self._current_mode
+
     def _on_resume_requested(self, name: str) -> None:
         """Reintenta procesar un archivo que falló."""
         if self._worker is not None:

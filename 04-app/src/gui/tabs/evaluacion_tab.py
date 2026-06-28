@@ -8,6 +8,7 @@ Estructura:
       │     └── _GlobalSummaryCard — métricas acumuladas
       └── body_row (QHBoxLayout)
             ├── body_widget (QVBoxLayout)
+            │     ├── _LatencyCard       — tabla de latencia histórica por archivo
             │     ├── _ErrorEvalCard     — 4 cards clicables + tabla expandible (con "Ver detalle")
             │     ├── _ChartsCard        — grid 2×2 (3 matplotlib + 1 texto)
             │     └── _MultispeciesCard  — clips con multi_species=True (con "Ver detalle")
@@ -635,6 +636,217 @@ class _ErrorDetailsTable(QFrame):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = f"Eval {self._current_key}"
+        ws.append(list(rows[0].keys()))
+        for row in rows:
+            ws.append([str(v) for v in row.values()])
+        wb.save(path)
+
+
+# ---------------------------------------------------------------------------
+# Card de evaluación de latencia (ancho completo) — primera card de contenido
+# ---------------------------------------------------------------------------
+
+class _LatencyCard(QFrame):
+    """
+    Tabla histórica de latencia por archivo procesado.
+    Acumula todas las corridas (persiste en history.json via latency_records).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("latencycard")
+        self.setStyleSheet(card_qss("latencycard"))
+
+        self._records: list[dict] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(16)
+
+        # ── Header ───────────────────────────────────────────────────────
+        hrow = QHBoxLayout()
+        hrow.setContentsMargins(0, 0, 0, 0)
+
+        sec = QLabel("EVALUACIÓN DE LATENCIA")
+        sec.setStyleSheet(section_label_qss())
+        hrow.addWidget(sec)
+        hrow.addStretch()
+
+        self._btn_csv  = _export_btn("Exportar CSV")
+        self._btn_xlsx = _export_btn("Exportar XLSX")
+        self._btn_csv.setEnabled(False)
+        self._btn_xlsx.setEnabled(False)
+        self._btn_csv.clicked.connect(self._export_csv)
+        self._btn_xlsx.clicked.connect(self._export_xlsx)
+        hrow.addWidget(self._btn_csv)
+        hrow.addSpacing(6)
+        hrow.addWidget(self._btn_xlsx)
+        layout.addLayout(hrow)
+        layout.addWidget(_sep())
+
+        # ── Estado vacío ─────────────────────────────────────────────────
+        self._empty_lbl = QLabel("Sin corridas registradas")
+        self._empty_lbl.setStyleSheet(
+            f"color: {NEUTRAL}; font-size: 13px; font-style: italic;"
+            " background: transparent;"
+        )
+        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_lbl.setMinimumHeight(56)
+        layout.addWidget(self._empty_lbl)
+
+        # ── Tabla ─────────────────────────────────────────────────────────
+        self._table = QTableWidget(0, 7)
+        self._table.setHorizontalHeaderLabels([
+            "ARCHIVO", "TIPO", "DURACIÓN", "MODO",
+            "FRAMES ANALIZADOS", "TIEMPO PROCESAMIENTO", "FACTOR",
+        ])
+        hh = self._table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(1, 72)
+        self._table.setColumnWidth(2, 80)
+        self._table.setColumnWidth(3, 90)
+        self._table.setColumnWidth(4, 140)
+        self._table.setColumnWidth(5, 162)
+        self._table.setColumnWidth(6, 76)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setShowGrid(False)
+        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._table.setStyleSheet(_table_qss())
+        self._table.setMinimumHeight(80)
+        self._table.setMaximumHeight(320)
+        self._table.hide()
+        layout.addWidget(self._table)
+
+    # ------------------------------------------------------------------
+
+    def update_data(self, records: list[dict]) -> None:
+        self._records = records
+        has = bool(records)
+        self._empty_lbl.setVisible(not has)
+        self._table.setVisible(has)
+        self._btn_csv.setEnabled(has)
+        self._btn_xlsx.setEnabled(has)
+        if has:
+            self._rebuild()
+
+    def _rebuild(self) -> None:
+        self._table.setRowCount(0)
+        for i, rec in enumerate(self._records):
+            self._table.insertRow(i)
+            self._table.setRowHeight(i, 36)
+
+            filename      = rec.get("filename", "—")
+            file_type     = rec.get("type", "—")
+            duration_sec  = rec.get("duration_sec")
+            mode          = rec.get("mode", "—")
+            frames        = rec.get("frames_processed")
+            processing_sec = float(rec.get("processing_sec") or 0.0)
+
+            # Col 0 — Archivo
+            it0 = QTableWidgetItem(filename)
+            it0.setToolTip(filename)
+            self._table.setItem(i, 0, it0)
+
+            # Col 1 — Tipo
+            it1 = QTableWidgetItem(file_type.capitalize())
+            it1.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 1, it1)
+
+            # Col 2 — Duración
+            dur_str = _fmt_time(duration_sec) if duration_sec is not None else "—"
+            it2 = QTableWidgetItem(dur_str)
+            it2.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 2, it2)
+
+            # Col 3 — Modo
+            it3 = QTableWidgetItem(mode)
+            it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 3, it3)
+
+            # Col 4 — Frames analizados
+            it4 = QTableWidgetItem(str(frames) if frames is not None else "—")
+            it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 4, it4)
+
+            # Col 5 — Tiempo de procesamiento
+            it5 = QTableWidgetItem(_fmt_time(processing_sec))
+            it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 5, it5)
+
+            # Col 6 — Factor
+            if duration_sec is not None and duration_sec > 0:
+                factor_str = f"{processing_sec / duration_sec:.2f}×"
+            else:
+                factor_str = "—"
+            it6 = QTableWidgetItem(factor_str)
+            it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 6, it6)
+
+    # ------------------------------------------------------------------
+    # Exportación
+
+    def _collect_rows(self) -> list[dict]:
+        out = []
+        for rec in self._records:
+            duration_sec   = rec.get("duration_sec")
+            processing_sec = float(rec.get("processing_sec") or 0.0)
+            frames         = rec.get("frames_processed")
+            dur_str        = _fmt_time(duration_sec) if duration_sec is not None else "—"
+            factor_str = (
+                f"{processing_sec / duration_sec:.2f}×"
+                if duration_sec is not None and duration_sec > 0 else "—"
+            )
+            out.append({
+                "archivo":              rec.get("filename", "—"),
+                "tipo":                 rec.get("type", "—"),
+                "duracion":             dur_str,
+                "modo":                 rec.get("mode", "—"),
+                "frames_analizados":    str(frames) if frames is not None else "—",
+                "tiempo_procesamiento": _fmt_time(processing_sec),
+                "factor":               factor_str,
+            })
+        return out
+
+    def _export_csv(self) -> None:
+        rows = self._collect_rows()
+        if not rows:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar CSV", "sareko_latencia.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def _export_xlsx(self) -> None:
+        rows = self._collect_rows()
+        if not rows:
+            return
+        try:
+            import openpyxl
+        except ImportError:
+            self._export_csv()
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exportar XLSX", "sareko_latencia.xlsx", "Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Latencia SAREKO"
         ws.append(list(rows[0].keys()))
         for row in rows:
             ws.append([str(v) for v in row.values()])
@@ -1333,11 +1545,13 @@ class EvaluacionTab(QWidget):
         body_col.setSpacing(16)
 
         # Cards de contenido
-        self._error_card  = _ErrorEvalCard()
-        self._charts_card = _ChartsCard()
-        self._multi_card  = _MultispeciesCard()
-        self._empty_state = _EmptyState()
+        self._latency_card = _LatencyCard()
+        self._error_card   = _ErrorEvalCard()
+        self._charts_card  = _ChartsCard()
+        self._multi_card   = _MultispeciesCard()
+        self._empty_state  = _EmptyState()
 
+        body_col.addWidget(self._latency_card)
         body_col.addWidget(self._error_card)
         body_col.addWidget(self._multi_card)
         body_col.addWidget(self._charts_card)
@@ -1352,6 +1566,7 @@ class EvaluacionTab(QWidget):
         outer.addLayout(body_row)
 
         # ── Estado inicial (sin datos) ────────────────────────────────────
+        self._latency_card.hide()
         self._error_card.hide()
         self._charts_card.hide()
         self._multi_card.hide()
@@ -1426,6 +1641,7 @@ class EvaluacionTab(QWidget):
         )
 
         self._empty_state.setVisible(not has_data)
+        self._latency_card.setVisible(has_data)
         self._error_card.setVisible(has_data)
         self._charts_card.setVisible(has_data)
         self._multi_card.setVisible(has_data)
@@ -1435,6 +1651,8 @@ class EvaluacionTab(QWidget):
             return
 
         self._summary_card.update_metrics(n_corridas, n_registros, n_validaciones)
+        latency_recs = history.get("latency_records", []) if history else []
+        self._latency_card.update_data(latency_recs)
         self._error_card.update_data(records)
         self._charts_card.update_data(records, batch_summary, history)
         self._multi_card.update_data(records)
