@@ -818,6 +818,7 @@ class _SidePanel(QFrame):
         self._anim = QPropertyAnimation(self, b"maximumWidth")
         self._anim.setDuration(260)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim_connected: bool = False
 
         self._current_record: Optional[dict] = None
         self._current_row_idx: int = -1
@@ -1073,6 +1074,13 @@ class _SidePanel(QFrame):
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(PANEL_WIDTH)
+        if self._anim_connected:
+            try:
+                self._anim.finished.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        self._anim.finished.connect(self._on_open_finished)
+        self._anim_connected = True
         self._anim.start()
 
     def close_panel(self) -> None:
@@ -1082,13 +1090,22 @@ class _SidePanel(QFrame):
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(0)
-        try:
-            self._anim.finished.disconnect()
-        except (RuntimeError, TypeError):
-            pass
-        self._anim.finished.connect(lambda: self.closed.emit())
+        if self._anim_connected:
+            try:
+                self._anim.finished.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            self._anim_connected = False
+        self._anim.finished.connect(self._on_close_finished)
+        self._anim_connected = True
         self._anim.start()
         self._current_record = None
+
+    def _on_open_finished(self) -> None:
+        pass
+
+    def _on_close_finished(self) -> None:
+        self.closed.emit()
 
     def load_record(self, record: dict, row_idx: int = -1) -> None:
         self._current_record  = record
