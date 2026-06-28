@@ -129,7 +129,7 @@ class _HeroCard(QFrame):
         bc = QLabel("SAREKO / ANÁLISIS")
         bc.setStyleSheet(section_label_qss())
 
-        title = QLabel("Herramienta de análisis automatizado de cámaras trampa")
+        title = QLabel("Análisis automatizado de cámaras trampa")
         title.setStyleSheet(title_qss(32))
 
         desc = QLabel(
@@ -651,7 +651,7 @@ class _DetailPanel(QFrame):
         self._add_row(3, "PROGRESO AL FALLAR",  f"{pct} %")
         self.show()
 
-    def show_completed(self, name: str, events: list) -> None:
+    def show_completed(self, name: str, events: list, meta: dict | None = None) -> None:
         self._clear()
         self._title.setText("DETALLE DE LA CORRIDA")
 
@@ -679,6 +679,20 @@ class _DetailPanel(QFrame):
         self._add_row(2, "EVENTOS DETECTADOS",      str(len(events)))
         self._add_row(3, "CONFIANZA (alta / baja)", conf_str)
         self._add_row(4, "DISTANCIA COSENO PROM.",  avg_str)
+
+        r = 5
+        if meta:
+            dur  = meta.get("duration_sec")
+            proc = meta.get("processing_sec")
+            if dur is not None:
+                self._add_row(r, "DURACIÓN ARCHIVO", _fmt_time(dur))
+                r += 1
+            if proc is not None:
+                self._add_row(r, "TIEMPO PROCESAMIENTO", _fmt_time(proc))
+                r += 1
+            if dur is not None and proc is not None and dur > 0:
+                self._add_row(r, "FACTOR DE PROCESAMIENTO", f"{proc / dur:.1f}×")
+
         self.show()
 
 
@@ -953,6 +967,7 @@ class _BatchCard(QFrame):
                 "state":       "en cola",
                 "pct":         0,
                 "events":      [],
+                "meta":        None,
                 "error_msg":   "",
                 "error_stage": "",
                 "path":        file_path,
@@ -977,12 +992,13 @@ class _BatchCard(QFrame):
             self._update_progress(self._current_file, pct)
             self._rows[self._current_file]["pct"] = pct
 
-    def on_file_completed(self, name: str, events: list) -> None:
+    def on_file_completed(self, name: str, events: list, meta: dict | None = None) -> None:
         if name not in self._rows:
             return
         row = self._rows[name]
         row["state"]  = "completado"
         row["events"] = events
+        row["meta"]   = meta
         row["pct"]    = 100
         self._update_badge(name, "completado")
         self._update_progress(name, 100)
@@ -1009,7 +1025,7 @@ class _BatchCard(QFrame):
 
         self._check_export()
         if self._detail_target == name:
-            self._detail.show_completed(name, events)
+            self._detail.show_completed(name, events, meta)
 
     def on_file_error(self, name: str, msg: str) -> None:
         if name not in self._rows:
@@ -1055,7 +1071,7 @@ class _BatchCard(QFrame):
         if not row:
             return
         if row["state"] == "completado":
-            self._detail.show_completed(name, row["events"])
+            self._detail.show_completed(name, row["events"], row.get("meta"))
         elif row["state"] == "error":
             self._detail.show_error(
                 name, row["error_stage"], row["error_msg"], row["pct"]
@@ -1149,6 +1165,7 @@ class AnalisisTab(QWidget):
 
     events_ready  = Signal(str, list, str)  # (filename, events, filepath_str)
     batch_changed = Signal()               # emitida al completarse cada archivo
+    run_finished  = Signal()               # emitida cuando el worker termina toda la corrida
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1158,6 +1175,7 @@ class AnalisisTab(QWidget):
         self._worker: ProcessingWorker | None = None
         self._species_seen: set[str] = set()
         self._total_frames = 0
+        self._current_mode: str = "Estándar"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(32, 24, 32, 32)
@@ -1197,6 +1215,7 @@ class AnalisisTab(QWidget):
 
         self._species_seen.clear()
         self._total_frames = 0
+        self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
@@ -1221,13 +1240,13 @@ class AnalisisTab(QWidget):
     def _on_file_started(self, name: str) -> None:
         self._batch.on_file_started(name)
 
-    def _on_file_completed(self, name: str, events: list) -> None:
-        self._batch.on_file_completed(name, events)
+    def _on_file_completed(self, name: str, events: list, meta: dict) -> None:
+        self._batch.on_file_completed(name, events, meta)
         for ev in events:
             sp = getattr(ev, "species", None)
             if sp:
                 self._species_seen.add(sp)
-        self._total_frames += 1
+        self._total_frames += meta.get("frames_processed", 1)
         self._hero.set_especies(len(self._species_seen))
         self._hero.set_frames(self._total_frames)
         matching = [f for f in self._carga.selected_files if f.name == name]
@@ -1244,6 +1263,7 @@ class AnalisisTab(QWidget):
         self._carga.set_processing(False)
         self._seg.update_progress(100)
         self._worker = None
+        self.run_finished.emit()
 
     # ------------------------------------------------------------------
     # Persistencia de sesión
@@ -1265,6 +1285,7 @@ class AnalisisTab(QWidget):
             "files":        files,
             "species_seen": list(self._species_seen),
             "total_frames": self._total_frames,
+            "mode":         self._current_mode,
         }
 
     def restore_batch(self, summary: dict, records: list[dict]) -> None:
@@ -1317,6 +1338,7 @@ class AnalisisTab(QWidget):
         if not matching:
             return
 
+        self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)

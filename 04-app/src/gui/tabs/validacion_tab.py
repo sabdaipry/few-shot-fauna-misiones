@@ -116,6 +116,21 @@ def _get_confidence_level(event) -> str:
     return getattr(event, "confidence_level", "baja")
 
 
+def _get_decisor(event) -> str:
+    if getattr(event, "ambiguous", False):
+        return "Consenso"
+    if getattr(event, "confidence_level", "") == "alta":
+        return "BioCLIP"
+    return "KNN"
+
+
+_METHOD_TEXTS = {
+    "BioCLIP":  "Clasificación directa — distancia coseno al centroide ≤ 0.1866",
+    "KNN":      "Árbitro KNN — distancia coseno al centroide > 0.1866, voto ponderado por 5 vecinos",
+    "Consenso": "Evento ambiguo — quórum no alcanzado en ventana de 10 frames",
+}
+
+
 def _load_frame(filepath: Path, frame_idx: int) -> Optional[QPixmap]:
     """Extrae un frame de video y lo devuelve como QPixmap, o None si falla."""
     try:
@@ -822,6 +837,33 @@ class _SidePanel(QFrame):
         self._badge_conf.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self._layout.addWidget(self._badge_conf)
 
+        # ── Umbral aplicado ──────────────────────────────────────────────
+        umbral_row = QHBoxLayout()
+        lbl_umb = QLabel("UMBRAL APLICADO")
+        lbl_umb.setStyleSheet(section_label_qss())
+        self._lbl_umbral_val = QLabel("0.1866")
+        self._lbl_umbral_val.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 13px; font-weight: 700;"
+            " background: transparent;"
+        )
+        self._lbl_umbral_val.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        umbral_row.addWidget(lbl_umb)
+        umbral_row.addStretch()
+        umbral_row.addWidget(self._lbl_umbral_val)
+        self._layout.addLayout(umbral_row)
+
+        # ── Método de asignación ─────────────────────────────────────────
+        lbl_met_header = QLabel("MÉTODO DE ASIGNACIÓN")
+        lbl_met_header.setStyleSheet(section_label_qss())
+        self._layout.addWidget(lbl_met_header)
+
+        self._lbl_metodo = QLabel("—")
+        self._lbl_metodo.setStyleSheet(body_qss(0.75))
+        self._lbl_metodo.setWordWrap(True)
+        self._layout.addWidget(self._lbl_metodo)
+
         self._layout.addWidget(_sep())
 
         # ── Validación inline ────────────────────────────────────────────
@@ -955,12 +997,16 @@ class _SidePanel(QFrame):
 
         # Distancia coseno
         dist = getattr(event, "cosine_distance", None)
-        self._lbl_dist.setText(f"{dist:.4f}" if dist is not None else "—")
+        self._lbl_dist.setText(f"{dist:.2f}" if dist is not None else "—")
 
         # Badge confianza
         conf = _get_confidence_level(event)
         self._badge_conf.setText(conf)
         self._badge_conf.setStyleSheet(badge_qss(_CONF_COLORS.get(conf, NEUTRAL)))
+
+        # Método de asignación
+        decisor = _get_decisor(event)
+        self._lbl_metodo.setText(_METHOD_TEXTS.get(decisor, "—"))
 
         # Validación inline
         for i in reversed(range(self._val_cell_container.layout().count())):
@@ -1130,10 +1176,10 @@ class _RegistrosSection(QFrame):
         layout.addWidget(_sep())
 
         # ── Tabla ─────────────────────────────────────────────────────────
-        self._table = QTableWidget(0, 7)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESPECIE (COMÚN)",
-            "ESPECIE (CIENTÍFICO)", "CONFIANZA", "VALIDACIÓN", "ACCIONES",
+            "ESPECIE (CIENTÍFICO)", "CONFIANZA", "DECISOR", "VALIDACIÓN", "ACCIONES",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -1143,11 +1189,13 @@ class _RegistrosSection(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 90)
         self._table.setColumnWidth(4, 110)
-        self._table.setColumnWidth(5, 250)
-        self._table.setColumnWidth(6, 150)
+        self._table.setColumnWidth(5, 86)
+        self._table.setColumnWidth(6, 250)
+        self._table.setColumnWidth(7, 150)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1276,15 +1324,20 @@ class _RegistrosSection(QFrame):
             b_lay.addWidget(b_lbl)
             self._table.setCellWidget(local_idx, 4, badge_w)
 
-            # Col 5 — Validación
+            # Col 5 — Decisor
+            it5 = QTableWidgetItem(_get_decisor(event))
+            it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(local_idx, 5, it5)
+
+            # Col 6 — Validación
             val_cell = _ValidationCell(record)
             val_cell.validated.connect(
                 lambda cat, sp, gi=global_idx: self.validation_happened.emit(gi, cat, sp)
             )
             self._val_cells[global_idx] = val_cell
-            self._table.setCellWidget(local_idx, 5, val_cell)
+            self._table.setCellWidget(local_idx, 6, val_cell)
 
-            # Col 6 — Acciones
+            # Col 7 — Acciones
             act_w = QWidget()
             act_w.setStyleSheet("background: transparent;")
             act_l = QHBoxLayout(act_w)
@@ -1300,7 +1353,7 @@ class _RegistrosSection(QFrame):
             act_l.addWidget(btn_ver)
             act_l.addWidget(btn_del)
             act_l.addStretch()
-            self._table.setCellWidget(local_idx, 6, act_w)
+            self._table.setCellWidget(local_idx, 7, act_w)
 
         # Paginación
         total = len(self._filtered)
@@ -1345,6 +1398,7 @@ class _RegistrosSection(QFrame):
                 "especie":          getattr(ev, "species", "—"),
                 "nombre_comun":     _get_common_name(ev),
                 "confianza":        _get_confidence_level(ev),
+                "decisor":          _get_decisor(ev),
                 "distancia_coseno": f"{getattr(ev, 'cosine_distance', '—'):.4f}"
                                     if getattr(ev, "cosine_distance", None) is not None
                                     else "—",

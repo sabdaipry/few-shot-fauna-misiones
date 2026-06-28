@@ -189,6 +189,14 @@ def _expected_species(record: dict) -> str:
     return cat or "—"
 
 
+def _get_decisor(event) -> str:
+    if getattr(event, "ambiguous", False):
+        return "Consenso"
+    if getattr(event, "confidence_level", "") == "alta":
+        return "BioCLIP"
+    return "KNN"
+
+
 def _color_rgb(hex_color: str) -> tuple:
     h = hex_color.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
@@ -397,10 +405,10 @@ class _ErrorDetailsTable(QFrame):
         layout.addLayout(hrow)
         layout.addWidget(_sep())
 
-        self._table = QTableWidget(0, 6)
+        self._table = QTableWidget(0, 7)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESP. ESPERADA",
-            "ESP. PREDICHA", "CONFIANZA", "TOP 5 CANDIDATOS",
+            "ESP. PREDICHA", "CONFIANZA", "DECISOR", "TOP 5 CANDIDATOS",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -408,10 +416,12 @@ class _ErrorDetailsTable(QFrame):
         hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 80)
         self._table.setColumnWidth(4, 100)
+        self._table.setColumnWidth(5, 80)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -475,12 +485,17 @@ class _ErrorDetailsTable(QFrame):
             bl.addWidget(b_lbl)
             self._table.setCellWidget(i, 4, badge_w)
 
-            # Col 5 — Top 5 candidatos
+            # Col 5 — Decisor
+            it5 = QTableWidgetItem(_get_decisor(event))
+            it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 5, it5)
+
+            # Col 6 — Top 5 candidatos
             top5 = getattr(event, "top5_candidates", [])
             top5_str = ", ".join(c.get("species", "?") for c in top5) if top5 else "—"
-            it5 = QTableWidgetItem(top5_str)
-            it5.setToolTip(top5_str)
-            self._table.setItem(i, 5, it5)
+            it6 = QTableWidgetItem(top5_str)
+            it6.setToolTip(top5_str)
+            self._table.setItem(i, 6, it6)
 
     def _italic_cell(self, text: str) -> QWidget:
         w = QWidget()
@@ -515,6 +530,7 @@ class _ErrorDetailsTable(QFrame):
                 "especie_esperada": _expected_species(rec),
                 "especie_predicha": getattr(ev, "species", "—"),
                 "confianza":        getattr(ev, "confidence_level", "—"),
+                "decisor":          _get_decisor(ev),
                 "top5_candidatos":  ", ".join(c.get("species", "?") for c in top5),
             })
         return out

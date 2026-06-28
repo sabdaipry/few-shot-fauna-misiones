@@ -46,7 +46,7 @@ class ProcessingWorker(QThread):
 
     progress_updated = Signal(int)
     file_started     = Signal(str)
-    file_completed   = Signal(str, list)
+    file_completed   = Signal(str, list, dict)
     stage_updated    = Signal(str, int)
     error_occurred   = Signal(str, str)
     metrics_updated  = Signal(dict)
@@ -116,19 +116,19 @@ class ProcessingWorker(QThread):
 
             try:
                 if file_path.suffix.lower() in VIDEO_EXTS:
-                    events = self._process_video(
+                    events, meta = self._process_video(
                         file_path, embedder, classifier,
                         file_idx, total_files,
                     )
                 elif file_path.suffix.lower() in IMAGE_EXTS:
-                    events = self._process_image(
+                    events, meta = self._process_image(
                         file_path, embedder, classifier,
                         file_idx, total_files,
                     )
                 else:
                     raise ValueError(f"Formato no soportado: {file_path.suffix}")
 
-                self.file_completed.emit(file_path.name, events)
+                self.file_completed.emit(file_path.name, events, meta)
 
             except Exception as exc:
                 self.error_occurred.emit(file_path.name, str(exc))
@@ -169,9 +169,10 @@ class ProcessingWorker(QThread):
         if not cap.isOpened():
             raise RuntimeError(f"No se pudo abrir: {path}")
 
-        fps          = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        est_sampled  = max(1, math.ceil(total_frames / self.N))
+        fps            = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        total_frames   = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_duration = total_frames / fps
+        est_sampled    = max(1, math.ceil(total_frames / self.N))
         cap.release()
 
         self.stage_updated.emit("Extracción de frames", 100)
@@ -206,7 +207,8 @@ class ProcessingWorker(QThread):
             batch_size=self.batch_size,
         )
         events = processor.process(path, progress_callback=_progress)
-        self._bioclip_time += time.monotonic() - t0
+        file_processing_sec = time.monotonic() - t0
+        self._bioclip_time += file_processing_sec
         self._total_frames_done += frames_done[0]
 
         self.stage_updated.emit("Clasificación por similitud coseno", 100)
@@ -214,7 +216,11 @@ class ProcessingWorker(QThread):
         self.stage_updated.emit("Consenso temporal", 100)
         self.stage_updated.emit("Escritura de resultados", 50)
 
-        return events
+        return events, {
+            "duration_sec":     video_duration,
+            "processing_sec":   file_processing_sec,
+            "frames_processed": frames_done[0],
+        }
 
     # ------------------------------------------------------------------
     # Procesamiento de imagen
@@ -234,7 +240,8 @@ class ProcessingWorker(QThread):
         t0 = time.monotonic()
         pil_img = Image.open(path).convert("RGB")
         emb     = embedder.embed_image(pil_img)
-        self._bioclip_time += time.monotonic() - t0
+        file_processing_sec = time.monotonic() - t0
+        self._bioclip_time += file_processing_sec
 
         self.stage_updated.emit("Generación de embeddings (BioCLIP)", 100)
         self.stage_updated.emit("Clasificación por similitud coseno", 0)
@@ -258,7 +265,11 @@ class ProcessingWorker(QThread):
             frames_arch = 1,
             tiempo_total= elapsed,
         )
-        return [result]
+        return [result], {
+            "duration_sec":     None,
+            "processing_sec":   file_processing_sec,
+            "frames_processed": 1,
+        }
 
     # ------------------------------------------------------------------
     # Emisión de métricas
