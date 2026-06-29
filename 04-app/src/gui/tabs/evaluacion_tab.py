@@ -445,10 +445,10 @@ class _ErrorDetailsTable(QFrame):
         layout.addLayout(hrow)
         layout.addWidget(_sep())
 
-        self._table = QTableWidget(0, 9)
+        self._table = QTableWidget(0, 10)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESP. ESPERADA",
-            "ESP. PREDICHA", "CONFIANZA", "DECISOR",
+            "ESP. PREDICHA", "CONFIANZA", "DIST. COSENO", "DECISOR",
             "TOP 5 CANDIDATOS", "ESPECIES ADICIONALES", "ACCIONES",
         ])
         hh = self._table.horizontalHeader()
@@ -458,14 +458,16 @@ class _ErrorDetailsTable(QFrame):
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
-        hh.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(9, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 80)
-        self._table.setColumnWidth(4, 100)
-        self._table.setColumnWidth(5, 80)
-        self._table.setColumnWidth(8, 110)
+        self._table.setColumnWidth(4, 90)
+        self._table.setColumnWidth(5, 100)
+        self._table.setColumnWidth(6, 80)
+        self._table.setColumnWidth(9, 110)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -529,26 +531,33 @@ class _ErrorDetailsTable(QFrame):
             bl.addWidget(b_lbl)
             self._table.setCellWidget(i, 4, badge_w)
 
-            # Col 5 — Decisor
-            it5 = QTableWidgetItem(_get_decisor(event))
+            # Col 5 — Distancia coseno
+            dist = getattr(event, "cosine_distance", None)
+            dist_str = f"{dist:.4f}" if dist is not None else "—"
+            it5 = QTableWidgetItem(dist_str)
             it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 5, it5)
 
-            # Col 6 — Top 5 candidatos
-            top5 = getattr(event, "top5_candidates", [])
-            top5_str = ", ".join(c.get("species", "?") for c in top5) if top5 else "—"
-            it6 = QTableWidgetItem(top5_str)
-            it6.setToolTip(top5_str)
+            # Col 6 — Decisor
+            it6 = QTableWidgetItem(_get_decisor(event))
+            it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 6, it6)
 
-            # Col 7 — Especies adicionales
-            extra = record.get("extra_species", [])
-            extra_str = ", ".join(extra) if extra else "—"
-            it7 = QTableWidgetItem(extra_str)
-            it7.setToolTip(extra_str)
+            # Col 7 — Top 5 candidatos
+            top5 = getattr(event, "top5_candidates", [])
+            top5_str = ", ".join(c.get("species", "?") for c in top5) if top5 else "—"
+            it7 = QTableWidgetItem(top5_str)
+            it7.setToolTip(top5_str)
             self._table.setItem(i, 7, it7)
 
-            # Col 8 — Acciones: Ver detalle
+            # Col 8 — Especies adicionales
+            extra = record.get("extra_species", [])
+            extra_str = ", ".join(extra) if extra else "—"
+            it8 = QTableWidgetItem(extra_str)
+            it8.setToolTip(extra_str)
+            self._table.setItem(i, 8, it8)
+
+            # Col 9 — Acciones: Ver detalle
             act_w = QWidget()
             act_w.setStyleSheet("background: transparent;")
             act_l = QHBoxLayout(act_w)
@@ -560,7 +569,7 @@ class _ErrorDetailsTable(QFrame):
             )
             act_l.addWidget(btn_ver)
             act_l.addStretch()
-            self._table.setCellWidget(i, 8, act_w)
+            self._table.setCellWidget(i, 9, act_w)
 
     def _italic_cell(self, text: str) -> QWidget:
         w = QWidget()
@@ -590,12 +599,14 @@ class _ErrorDetailsTable(QFrame):
             )
             top5  = getattr(ev, "top5_candidates", [])
             extra = rec.get("extra_species", [])
+            dist  = getattr(ev, "cosine_distance", None)
             out.append({
                 "archivo":              rec["filename"],
                 "intervalo":            ivl,
                 "especie_esperada":     _expected_species(rec),
                 "especie_predicha":     getattr(ev, "species", "—"),
                 "confianza":            getattr(ev, "confidence_level", "—"),
+                "distancia_coseno":     f"{dist:.4f}" if dist is not None else "—",
                 "decisor":              _get_decisor(ev),
                 "top5_candidatos":      ", ".join(c.get("species", "?") for c in top5),
                 "especies_adicionales": ", ".join(extra) if extra else "",
@@ -700,19 +711,20 @@ class _LatencyCard(QFrame):
             "FRAMES ANALIZADOS", "TIEMPO PROCESAMIENTO", "FACTOR",
         ])
         hh = self._table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(1, 72)
+        self._table.setColumnWidth(0, 220)
+        self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 80)
         self._table.setColumnWidth(3, 90)
-        self._table.setColumnWidth(4, 140)
-        self._table.setColumnWidth(5, 162)
-        self._table.setColumnWidth(6, 76)
+        self._table.setColumnWidth(4, 120)
+        self._table.setColumnWidth(5, 150)
+        self._table.setColumnWidth(6, 80)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)

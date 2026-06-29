@@ -1647,14 +1647,15 @@ class _RegistrosSection(QFrame):
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 140)
         self._table.setColumnWidth(1, 90)
         self._table.setColumnWidth(2, 140)
         self._table.setColumnWidth(3, 160)
-        self._table.setColumnWidth(4, 100)
+        self._table.setColumnWidth(4, 110)
         self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(6, 180)
         self._table.setColumnWidth(7, 70)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
@@ -2076,11 +2077,15 @@ class ValidacionTab(QWidget):
         if not self._panel_open:
             self._panel.open_panel()
             self._panel_open = True
+            self._registros._table.setColumnHidden(2, True)
+            self._registros._table.setColumnHidden(3, True)
 
     def _on_panel_closed(self) -> None:
         self._panel_open    = False
         self._panel_row_idx = -1
         self._registros.clear_active_row()
+        self._registros._table.setColumnHidden(2, False)
+        self._registros._table.setColumnHidden(3, False)
 
     def _on_panel_validation_saved(self, row_idx: int, category: str, species: str) -> None:
         self._registros.update_table_cell_validation(row_idx, category, species)
