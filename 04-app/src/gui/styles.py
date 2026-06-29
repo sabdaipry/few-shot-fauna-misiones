@@ -225,14 +225,22 @@ def tab_button_qss(active: bool) -> str:
             background-color: {bg};
             color:            {TEXT_PRIMARY};
             border:           1px solid {border_col};
-            border-radius:    20px;
+            border-radius:    50px;
             font-size:        13px;
             font-weight:      600;
             padding:          8px 22px;
             min-width:        100px;
+            outline:          none;
         }}
         QPushButton:hover {{
             background-color: {hover_bg};
+            border:           1px solid {border_col};
+            border-radius:    50px;
+        }}
+        QPushButton:pressed {{
+            background-color: {hover_bg};
+            border:           1px solid {border_col};
+            border-radius:    50px;
         }}
     """
 

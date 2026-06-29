@@ -15,8 +15,8 @@ Estructura:
 import csv
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtCore import Qt, Signal, QSize, QEvent, QRectF
+from PySide6.QtGui import QIcon, QPainter, QPixmap, QColor, QPainterPath, QPen, QFont
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
     QFrame,
@@ -39,7 +39,6 @@ from .styles import (
     body_qss,
     card_qss,
     section_label_qss,
-    tab_button_qss,
     title_qss,
 )
 from .tabs.analisis_tab import AnalisisTab
@@ -144,6 +143,75 @@ _TAB_SUBTITLES = [
 
 
 # ---------------------------------------------------------------------------
+# Botón de pestaña con forma de píldora (paintEvent manual)
+# ---------------------------------------------------------------------------
+
+class _TabButton(QPushButton):
+    """
+    QPushButton cuya forma de píldora se dibuja con QPainter.
+    Necesario porque Fusion ignora border-radius del QSS en QPushButton.
+    """
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setFlat(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.setMinimumWidth(100)
+        self._active  = False
+        self._hovered = False
+        font = self.font()
+        font.setPixelSize(13)
+        font.setWeight(QFont.Weight.DemiBold)
+        self.setFont(font)
+
+    def set_active(self, active: bool) -> None:
+        if self._active != active:
+            self._active = active
+            self.update()
+
+    def event(self, e):
+        t = e.type()
+        if t == QEvent.Type.HoverEnter:
+            self._hovered = True
+            self.update()
+        elif t == QEvent.Type.HoverLeave:
+            self._hovered = False
+            self.update()
+        return super().event(e)
+
+    def sizeHint(self):
+        w = max(100, self.fontMetrics().horizontalAdvance(self.text()) + 44)
+        return QSize(w, 36)
+
+    def paintEvent(self, _event):
+        if self._active:
+            bg  = QColor("#3a7028" if self._hovered else "#2d5a1f")
+            brd = QColor(ACCENT)
+        else:
+            bg  = QColor("#1a1a1a" if self._hovered else "#090909")
+            brd = QColor(153, 225, 122, 80)
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect   = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = rect.height() / 2.0
+
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+
+        p.fillPath(path, bg)
+        p.setPen(QPen(brd, 1.0))
+        p.drawPath(path)
+
+        p.setPen(QColor(TEXT_PRIMARY))
+        p.setFont(self.font())
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+
+
+# ---------------------------------------------------------------------------
 # Widget raíz: dibuja el fondo
 # ---------------------------------------------------------------------------
 
@@ -238,9 +306,7 @@ class _NavBar(QWidget):
         btn_container.setContentsMargins(0, 0, 0, 0)
 
         for i, label in enumerate(_TAB_LABELS):
-            btn = QPushButton(label)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn = _TabButton(label)
             btn.clicked.connect(lambda _checked, idx=i: self._on_tab(idx))
             self._buttons.append(btn)
             btn_container.addWidget(btn)
@@ -287,7 +353,7 @@ class _NavBar(QWidget):
 
     def _refresh_buttons(self):
         for i, btn in enumerate(self._buttons):
-            btn.setStyleSheet(tab_button_qss(i == self._current))
+            btn.set_active(i == self._current)
 
 
 # ---------------------------------------------------------------------------
