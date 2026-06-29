@@ -1641,7 +1641,7 @@ class EvaluacionTab(QWidget):
         self.setStyleSheet("background: transparent;")
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(16)
 
         # ── Header — dos cards lado a lado ────────────────────────────────

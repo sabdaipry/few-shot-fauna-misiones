@@ -146,7 +146,7 @@ class _HeroCard(QFrame):
         self.setStyleSheet(card_qss("herocard"))
 
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(12, 16, 12, 16)
+        outer.setContentsMargins(24, 24, 24, 24)
         outer.setSpacing(48)
 
         # Columna izquierda
@@ -1280,7 +1280,7 @@ class AnalisisTab(QWidget):
         self._current_mode: str = "Estándar"
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(16)
 
         # Hero
