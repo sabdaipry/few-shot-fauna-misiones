@@ -445,11 +445,10 @@ class _ErrorDetailsTable(QFrame):
         layout.addLayout(hrow)
         layout.addWidget(_sep())
 
-        self._table = QTableWidget(0, 10)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "INTERVALO", "ESP. ESPERADA",
-            "ESP. PREDICHA", "CONFIANZA", "DIST. COSENO", "DECISOR",
-            "TOP 5 CANDIDATOS", "ESPECIES ADICIONALES", "ACCIONES",
+            "ESP. PREDICHA", "CONFIANZA", "DIST. COSENO", "DECISOR", "ACCIONES",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -459,15 +458,13 @@ class _ErrorDetailsTable(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)
-        hh.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
-        hh.setSectionResizeMode(9, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 80)
-        self._table.setColumnWidth(4, 90)
+        self._table.setColumnWidth(4, 110)
         self._table.setColumnWidth(5, 100)
         self._table.setColumnWidth(6, 80)
-        self._table.setColumnWidth(9, 110)
+        self._table.setColumnWidth(7, 90)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -543,33 +540,19 @@ class _ErrorDetailsTable(QFrame):
             it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 6, it6)
 
-            # Col 7 — Top 5 candidatos
-            top5 = getattr(event, "top5_candidates", [])
-            top5_str = ", ".join(c.get("species", "?") for c in top5) if top5 else "—"
-            it7 = QTableWidgetItem(top5_str)
-            it7.setToolTip(top5_str)
-            self._table.setItem(i, 7, it7)
-
-            # Col 8 — Especies adicionales
-            extra = record.get("extra_species", [])
-            extra_str = ", ".join(extra) if extra else "—"
-            it8 = QTableWidgetItem(extra_str)
-            it8.setToolTip(extra_str)
-            self._table.setItem(i, 8, it8)
-
-            # Col 9 — Acciones: Ver detalle
+            # Col 7 — Acciones: Ver detalle
             act_w = QWidget()
             act_w.setStyleSheet("background: transparent;")
             act_l = QHBoxLayout(act_w)
             act_l.setContentsMargins(4, 2, 4, 2)
             act_l.setSpacing(0)
+            act_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
             btn_ver = icon_eye_btn("Ver detalle")
             btn_ver.clicked.connect(
                 lambda _=False, r=record: self.detail_requested.emit(r)
             )
             act_l.addWidget(btn_ver)
-            act_l.addStretch()
-            self._table.setCellWidget(i, 9, act_w)
+            self._table.setCellWidget(i, 7, act_w)
 
     def _italic_cell(self, text: str) -> QWidget:
         w = QWidget()
@@ -597,19 +580,15 @@ class _ErrorDetailsTable(QFrame):
                 f"{_fmt_time(st)} – {_fmt_time(et)}"
                 if st is not None and et is not None else "—"
             )
-            top5  = getattr(ev, "top5_candidates", [])
-            extra = rec.get("extra_species", [])
-            dist  = getattr(ev, "cosine_distance", None)
+            dist = getattr(ev, "cosine_distance", None)
             out.append({
-                "archivo":              rec["filename"],
-                "intervalo":            ivl,
-                "especie_esperada":     _expected_species(rec),
-                "especie_predicha":     getattr(ev, "species", "—"),
-                "confianza":            getattr(ev, "confidence_level", "—"),
-                "distancia_coseno":     f"{dist:.4f}" if dist is not None else "—",
-                "decisor":              _get_decisor(ev),
-                "top5_candidatos":      ", ".join(c.get("species", "?") for c in top5),
-                "especies_adicionales": ", ".join(extra) if extra else "",
+                "archivo":          rec["filename"],
+                "intervalo":        ivl,
+                "especie_esperada": _expected_species(rec),
+                "especie_predicha": getattr(ev, "species", "—"),
+                "confianza":        getattr(ev, "confidence_level", "—"),
+                "distancia_coseno": f"{dist:.4f}" if dist is not None else "—",
+                "decisor":          _get_decisor(ev),
             })
         return out
 
@@ -1662,7 +1641,7 @@ class EvaluacionTab(QWidget):
         self.setStyleSheet("background: transparent;")
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(16)
 
         # ── Header — dos cards lado a lado ────────────────────────────────

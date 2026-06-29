@@ -146,7 +146,7 @@ class _HeroCard(QFrame):
         self.setStyleSheet(card_qss("herocard"))
 
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(28, 16, 28, 16)
+        outer.setContentsMargins(12, 16, 12, 16)
         outer.setSpacing(48)
 
         # Columna izquierda
@@ -834,7 +834,7 @@ class _BatchCard(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 180)
-        self._table.setColumnWidth(1, 140)
+        self._table.setColumnWidth(1, 150)
         self._table.setColumnWidth(2, 140)
         self._table.setColumnWidth(3, 80)
         self._table.setColumnWidth(5, 90)
@@ -1280,11 +1280,12 @@ class AnalisisTab(QWidget):
         self._current_mode: str = "Estándar"
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(16)
 
         # Hero
         self._hero = _HeroCard()
+        self._hero.setMaximumHeight(200)
         outer.addWidget(self._hero)
 
         # Dos cards lado a lado

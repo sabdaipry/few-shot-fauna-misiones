@@ -184,7 +184,7 @@ class _NavBar(QWidget):
         super().__init__(parent)
         self.setObjectName("navbar")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setStyleSheet("background: transparent;")
+        self.setStyleSheet("QWidget#navbar { background: transparent; }")
         self.setFixedHeight(84)  # 64 card + 10 margen arriba + 10 margen abajo
 
         outer = QHBoxLayout(self)
@@ -387,6 +387,7 @@ class MainWindow(QMainWindow):
         scroll.setAutoFillBackground(False)
         scroll.viewport().setAutoFillBackground(False)
         scroll.viewport().setStyleSheet("background: transparent;")
+        scroll.setContentsMargins(16, 16, 16, 16)
         scroll.setWidget(self._stack)
 
         layout.addWidget(scroll)

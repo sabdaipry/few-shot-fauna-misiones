@@ -1647,16 +1647,15 @@ class _RegistrosSection(QFrame):
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 140)
-        self._table.setColumnWidth(1, 90)
-        self._table.setColumnWidth(2, 140)
-        self._table.setColumnWidth(3, 160)
+        self._table.setColumnWidth(1, 80)
+        self._table.setColumnWidth(2, 120)
+        self._table.setColumnWidth(3, 140)
         self._table.setColumnWidth(4, 110)
-        self._table.setColumnWidth(5, 80)
-        self._table.setColumnWidth(6, 180)
-        self._table.setColumnWidth(7, 70)
+        self._table.setColumnWidth(5, 90)
+        self._table.setColumnWidth(7, 80)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1960,7 +1959,7 @@ class ValidacionTab(QWidget):
         self._panel_row_idx: int = -1
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(16)
 
         # ── Header — dos cards lado a lado ────────────────────────────────

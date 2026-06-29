@@ -247,7 +247,7 @@ def badge_qss(bg: str, text: str = TEXT_PRIMARY) -> str:
             padding:          2px 10px;
             font-size:        11px;
             font-weight:      600;
-            min-width:        110px;
+            min-width:        120px;
         }}
     """
 
