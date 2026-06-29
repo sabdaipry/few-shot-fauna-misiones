@@ -699,12 +699,24 @@ class _ValidationCell(QWidget):
             self._display_candidates = list(top5)
 
         for cand in self._display_candidates:
-            sp   = cand.get("species", "")
-            dist = cand.get("cosine_distance", 0.0)
-            self._combo.addItem(f"{sp} (d={dist:.3f})")
+            sp    = cand.get("species", "")
+            dist  = cand.get("cosine_distance", 0.0)
+            label = self._species_label(sp)
+            self._combo.addItem(f"{label} (d={dist:.3f})")
 
         for opt in _SPECIAL_OPTS:
             self._combo.addItem(opt)
+
+    def _species_label(self, species: str) -> str:
+        """'Nombre común (Nombre científico)' o solo nombre científico si no hay común."""
+        for entry in self._species_catalog:
+            if entry.get("species") == species:
+                for key in ("nombre_comun_es_ar", "nombre_comun_en"):
+                    common = entry.get(key, "")
+                    if common and str(common).lower() not in ("", "nan", "none"):
+                        return f"{common} ({species})"
+                break
+        return species
 
     def _on_validate(self) -> None:
         idx = self._combo.currentIndex()
@@ -995,6 +1007,15 @@ class _SidePanel(QFrame):
         self._badge_conf.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self._layout.addWidget(self._badge_conf)
 
+        # Indicador de frames rechazados por umbral
+        self._lbl_rejected = QLabel()
+        self._lbl_rejected.setStyleSheet(
+            f"color: {NEUTRAL}; font-size: 11px; background: transparent;"
+        )
+        self._lbl_rejected.setWordWrap(True)
+        self._lbl_rejected.hide()
+        self._layout.addWidget(self._lbl_rejected)
+
         # ── Umbral aplicado ──────────────────────────────────────────────
         umbral_row = QHBoxLayout()
         lbl_umb = QLabel("UMBRAL APLICADO")
@@ -1213,6 +1234,16 @@ class _SidePanel(QFrame):
         conf = _get_confidence_level(event)
         self._badge_conf.setText(conf)
         self._badge_conf.setStyleSheet(badge_qss_for(conf))
+
+        # Indicador de frames rechazados
+        rejected = getattr(event, "rejected_frames", 0)
+        if rejected > 0:
+            self._lbl_rejected.setText(
+                f"{rejected} frame{'s' if rejected != 1 else ''} rechazado{'s' if rejected != 1 else ''} por umbral 0.25"
+            )
+            self._lbl_rejected.show()
+        else:
+            self._lbl_rejected.hide()
 
         # Método de asignación
         decisor = _get_decisor(event)

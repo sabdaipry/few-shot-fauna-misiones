@@ -54,6 +54,7 @@ logger = logging.getLogger("sareko.pipeline")
 
 # Umbral calibrado en 03-threshold-optimization (percentil 95 distribución intraclase)
 CONFIDENCE_THRESHOLD   = float(_CONFIG.get("confidence_threshold",   0.1866))
+REJECTION_THRESHOLD    = float(_CONFIG.get("rejection_threshold",    0.25))
 KNN_K                  = int(  _CONFIG.get("knn_k",                  5))
 _SLIDING_P_DEFAULT     = int(  _CONFIG.get("sliding_close_quorum_P", 3))
 _SLIDING_THRESHOLD     = float(_CONFIG.get("sliding_close_threshold", CONFIDENCE_THRESHOLD))
@@ -247,9 +248,10 @@ class ClassificationResult:
     species:            str
     nombre_comun_es_ar: str
     nombre_comun_en:    str
-    confidence_level:   str         # "alta" | "baja"
+    confidence_level:   str         # "alta" | "baja" | "rechazado"
     cosine_distance:    float       # distancia coseno al centroide de la especie predicha
     top5_candidates:    list[dict]  # [{"species": ..., "cosine_distance": ...}, ...]
+    decisor:            str = ""    # "BioCLIP" | "KNN" | "Rechazo"
 
 
 class SpeciesClassifier:
@@ -301,6 +303,23 @@ class SpeciesClassifier:
                 confidence_level   = "alta",
                 cosine_distance    = best_dist,
                 top5_candidates    = top5,
+                decisor            = "BioCLIP",
+            )
+
+        if best_dist > REJECTION_THRESHOLD:
+            names = self._catalog.get_common_names(best_species)
+            logger.debug(
+                "[SpeciesClassifier] Frame rechazado: %s d=%.4f > %.4f",
+                best_species, best_dist, REJECTION_THRESHOLD,
+            )
+            return ClassificationResult(
+                species            = best_species,
+                nombre_comun_es_ar = names["es_ar"],
+                nombre_comun_en    = names["en"],
+                confidence_level   = "rechazado",
+                cosine_distance    = best_dist,
+                top5_candidates    = top5,
+                decisor            = "Rechazo",
             )
 
         # --- Árbitro KNN sobre el gallery completo ---
@@ -336,6 +355,7 @@ class SpeciesClassifier:
             confidence_level   = "baja",
             cosine_distance    = best_dist,
             top5_candidates    = top5,
+            decisor            = "KNN",
         )
 
 
@@ -588,6 +608,7 @@ class BiologicalEvent:
     consensus_mode:           str         = "static"   # "static" | "sliding"
     frame_distances:          list[float] = field(default_factory=list)
     frame_timestamps:         list[float] = field(default_factory=list)
+    rejected_frames:          int         = 0
 
 
 class VideoProcessor:
@@ -650,9 +671,10 @@ class VideoProcessor:
         total_frames  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         est_sampled   = max(1, math.ceil(total_frames / self.N))
 
-        frame_predictions: list[dict] = []
-        batch_imgs:        list[Image.Image] = []
-        batch_meta:        list[dict]        = []
+        frame_predictions:    list[dict]  = []
+        rejected_timestamps:  list[float] = []
+        batch_imgs:           list[Image.Image] = []
+        batch_meta:           list[dict]        = []
         processed = 0
 
         def _flush() -> None:
@@ -662,11 +684,14 @@ class VideoProcessor:
             embs = self._embedder.embed_batch(batch_imgs)
             for i, meta in enumerate(batch_meta):
                 result = self._classifier.classify(embs[i])
-                frame_predictions.append({
-                    "frame_idx": meta["frame_idx"],
-                    "timestamp": meta["timestamp"],
-                    "result":    result,
-                })
+                if result.confidence_level == "rechazado":
+                    rejected_timestamps.append(meta["timestamp"])
+                else:
+                    frame_predictions.append({
+                        "frame_idx": meta["frame_idx"],
+                        "timestamp": meta["timestamp"],
+                        "result":    result,
+                    })
                 processed += 1
                 if progress_callback:
                     progress_callback(processed, est_sampled)
@@ -693,8 +718,17 @@ class VideoProcessor:
         _flush()
         cap.release()
         if self.consensus_mode == "sliding":
-            return self._build_events_sliding(frame_predictions)
-        return self._build_events(frame_predictions)
+            events = self._build_events_sliding(frame_predictions)
+        else:
+            events = self._build_events(frame_predictions)
+
+        for event in events:
+            event.rejected_frames = sum(
+                1 for ts in rejected_timestamps
+                if event.start_time <= ts <= event.end_time
+            )
+
+        return events
 
     # ------------------------------------------------------------------
     # Construcción de eventos con ventana de consenso
