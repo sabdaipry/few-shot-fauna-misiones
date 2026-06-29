@@ -834,7 +834,7 @@ class _BatchCard(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 180)
-        self._table.setColumnWidth(1, 150)
+        self._table.setColumnWidth(1, 130)
         self._table.setColumnWidth(2, 140)
         self._table.setColumnWidth(3, 80)
         self._table.setColumnWidth(5, 90)
