@@ -530,13 +530,15 @@ class MainWindow(QMainWindow):
         Una validación fue guardada desde el panel lateral de EvaluacionTab.
 
         Los dicts de registros son compartidos por referencia entre ambas pestañas,
-        por lo que el cambio ya está en memoria. Sólo hay que:
+        por lo que el cambio ya está en memoria. Hay que:
         1. Guardar la sesión en disco.
         2. Refrescar la tabla de ValidacionTab para que refleje el estado actualizado.
+        3. Refrescar EvaluacionTab para que _MultispeciesCard y _ErrorEvalCard
+           se repopulen con el estado de validación actualizado.
         """
         self._save_session()
-        # restore_records reconstruye la tabla leyendo el estado actual de los dicts
         self._validacion_tab.restore_records(self._validacion_tab.get_records())
+        self._update_evaluacion()
 
     def _on_reset(self) -> None:
         msg = QMessageBox(self)
