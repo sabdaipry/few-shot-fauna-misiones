@@ -217,7 +217,8 @@ class SessionManager:
                 conf_counts["baja"] = conf_counts.get("baja", 0) + 1
 
         # Acumular latency records por cada archivo completado de esta corrida
-        mode = batch_summary.get("mode", "—")
+        mode           = batch_summary.get("mode", "—")
+        consensus_mode = batch_summary.get("consensus_mode", "static")
         for f in files:
             if f.get("state") != "completado":
                 continue
@@ -230,6 +231,7 @@ class SessionManager:
                 "type":             "video" if dur_sec is not None else "imagen",
                 "duration_sec":     dur_sec,
                 "mode":             mode,
+                "consensus_mode":   consensus_mode,
                 "frames_processed": f.get("frames_processed"),
                 "processing_sec":   float(proc_sec),
             })

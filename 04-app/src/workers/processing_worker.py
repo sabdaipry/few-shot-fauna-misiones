@@ -53,20 +53,22 @@ class ProcessingWorker(QThread):
 
     def __init__(
         self,
-        files:      list[Path],
-        N:          int  = 30,
-        K:          int  = 10,
-        M:          int  = 6,
-        batch_size: int  = 8,
+        files:          list[Path],
+        N:              int  = 30,
+        K:              int  = 10,
+        M:              int  = 6,
+        batch_size:     int  = 8,
+        consensus_mode: str  = "static",
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._files      = files
-        self.N           = N
-        self.K           = K
-        self.M           = M
-        self.batch_size  = batch_size
-        self._stop_flag  = False
+        self._files         = files
+        self.N              = N
+        self.K              = K
+        self.M              = M
+        self.batch_size     = batch_size
+        self.consensus_mode = consensus_mode
+        self._stop_flag     = False
 
         # Estado de métricas acumuladas
         self._total_frames_done = 0
@@ -205,6 +207,7 @@ class ProcessingWorker(QThread):
             embedder, classifier,
             N=self.N, K=self.K, M=self.M,
             batch_size=self.batch_size,
+            consensus_mode=self.consensus_mode,
         )
         events = processor.process(path, progress_callback=_progress)
         file_processing_sec = time.monotonic() - t0

@@ -1,0 +1,9 @@
+{
+  "confidence_threshold": 0.1866,
+  "knn_k": 5,
+  "default_N": 30,
+  "default_K": 10,
+  "default_M": 6,
+  "sliding_close_quorum_P": 3,
+  "sliding_close_threshold": 0.1866
+}

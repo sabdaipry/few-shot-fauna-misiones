@@ -684,10 +684,10 @@ class _LatencyCard(QFrame):
         layout.addWidget(self._empty_lbl)
 
         # ── Tabla ─────────────────────────────────────────────────────────
-        self._table = QTableWidget(0, 7)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "TIPO", "DURACIÓN", "MODO",
-            "FRAMES", "T. PROCESO", "FACTOR",
+            "CONSENSO", "FRAMES", "T. PROCESO", "FACTOR",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -697,13 +697,15 @@ class _LatencyCard(QFrame):
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(0, 220)
+        hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(0, 200)
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 80)
         self._table.setColumnWidth(3, 90)
-        self._table.setColumnWidth(4, 80)
-        self._table.setColumnWidth(5, 100)
-        self._table.setColumnWidth(6, 70)
+        self._table.setColumnWidth(4, 90)
+        self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(6, 100)
+        self._table.setColumnWidth(7, 70)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -762,24 +764,31 @@ class _LatencyCard(QFrame):
             it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 3, it3)
 
-            # Col 4 — Frames analizados
-            it4 = QTableWidgetItem(str(frames) if frames is not None else "—")
+            # Col 4 — Consenso
+            consensus_mode = rec.get("consensus_mode", "static")
+            consensus_str  = "Deslizante" if consensus_mode == "sliding" else "Estático"
+            it4 = QTableWidgetItem(consensus_str)
             it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 4, it4)
 
-            # Col 5 — Tiempo de procesamiento
-            it5 = QTableWidgetItem(_fmt_time(processing_sec))
+            # Col 5 — Frames analizados
+            it5 = QTableWidgetItem(str(frames) if frames is not None else "—")
             it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 5, it5)
 
-            # Col 6 — Factor
+            # Col 6 — Tiempo de procesamiento
+            it6 = QTableWidgetItem(_fmt_time(processing_sec))
+            it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 6, it6)
+
+            # Col 7 — Factor
             if duration_sec is not None and duration_sec > 0:
                 factor_str = f"{processing_sec / duration_sec:.2f}×"
             else:
                 factor_str = "—"
-            it6 = QTableWidgetItem(factor_str)
-            it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(i, 6, it6)
+            it7 = QTableWidgetItem(factor_str)
+            it7.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 7, it7)
 
     # ------------------------------------------------------------------
     # Exportación
@@ -795,11 +804,13 @@ class _LatencyCard(QFrame):
                 f"{processing_sec / duration_sec:.2f}×"
                 if duration_sec is not None and duration_sec > 0 else "—"
             )
+            consensus_mode = rec.get("consensus_mode", "static")
             out.append({
                 "archivo":              rec.get("filename", "—"),
                 "tipo":                 rec.get("type", "—"),
                 "duracion":             dur_str,
                 "modo":                 rec.get("mode", "—"),
+                "consenso":             "Deslizante" if consensus_mode == "sliding" else "Estático",
                 "frames_analizados":    str(frames) if frames is not None else "—",
                 "tiempo_procesamiento": _fmt_time(processing_sec),
                 "factor":               factor_str,

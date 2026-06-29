@@ -64,6 +64,15 @@ _MODES = [
      "Recomendado para eventos cortos o fauna esquiva."),
 ]
 
+_CONSENSUS_MODES = [
+    ("Ventana estática",
+     "Ventanas independientes de K frames. Comportamiento predecible, "
+     "puede fragmentar eventos largos."),
+    ("Ventana deslizante",
+     "Detecta inicio y fin del evento frame a frame. "
+     "Más preciso para fauna intermitente."),
+]
+
 _STAGES = [
     "Extracción de frames",
     "Generación de embeddings (BioCLIP)",
@@ -318,6 +327,41 @@ class _CargaCard(QFrame):
 
         layout.addWidget(_sep())
 
+        # Modo de consenso
+        lbl_consensus = QLabel("MODO DE CONSENSO")
+        lbl_consensus.setStyleSheet(section_label_qss())
+        layout.addWidget(lbl_consensus)
+
+        self._consensus_combo = QComboBox()
+        self._consensus_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: rgba(0,0,0,120);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,80);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 13px;
+            }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background: #1a1a1a;
+                color: {TEXT_PRIMARY};
+                selection-background-color: #1f2c1d;
+                border: 1px solid rgba(153,225,122,80);
+            }}
+        """)
+        for name, _ in _CONSENSUS_MODES:
+            self._consensus_combo.addItem(name)
+        self._consensus_combo.setCurrentIndex(0)  # Estático por defecto
+        layout.addWidget(self._consensus_combo)
+
+        self._lbl_consensus_desc = QLabel(_CONSENSUS_MODES[0][1])
+        self._lbl_consensus_desc.setStyleSheet(body_qss(0.55))
+        self._lbl_consensus_desc.setWordWrap(True)
+        layout.addWidget(self._lbl_consensus_desc)
+
+        layout.addWidget(_sep())
+
         # Botón Procesar
         self._btn_procesar = QPushButton("Procesar")
         self._btn_procesar.setEnabled(False)
@@ -337,6 +381,7 @@ class _CargaCard(QFrame):
         self._btn_files.clicked.connect(self._pick_files)
         self._btn_folder.clicked.connect(self._pick_folder)
         self._combo.currentIndexChanged.connect(self._on_mode_changed)
+        self._consensus_combo.currentIndexChanged.connect(self._on_consensus_changed)
 
     # ------------------------------------------------------------------
 
@@ -412,6 +457,9 @@ class _CargaCard(QFrame):
     def _on_mode_changed(self, idx: int) -> None:
         self._lbl_desc.setText(_MODES[idx][4])
 
+    def _on_consensus_changed(self, idx: int) -> None:
+        self._lbl_consensus_desc.setText(_CONSENSUS_MODES[idx][1])
+
     # ------------------------------------------------------------------
     # API pública
 
@@ -432,6 +480,10 @@ class _CargaCard(QFrame):
         return _MODES[self._combo.currentIndex()][3]
 
     @property
+    def consensus_mode(self) -> str:
+        return "sliding" if self._consensus_combo.currentIndex() == 1 else "static"
+
+    @property
     def btn_procesar(self) -> QPushButton:
         return self._btn_procesar
 
@@ -449,6 +501,7 @@ class _CargaCard(QFrame):
         self._is_processing = active
         # Los botones de selección permanecen habilitados durante el procesamiento
         self._combo.setEnabled(not active)
+        self._consensus_combo.setEnabled(not active)
         if active:
             self._btn_procesar.setText("Procesando…")
             self._btn_procesar.setEnabled(False)
@@ -1285,6 +1338,7 @@ class AnalisisTab(QWidget):
         self._species_seen: set[str] = set()
         self._total_frames = 0
         self._current_mode: str = "Estándar"
+        self._current_consensus_mode: str = "static"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -1328,6 +1382,7 @@ class AnalisisTab(QWidget):
         self._species_seen.clear()
         self._total_frames = 0
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
+        self._current_consensus_mode = self._carga.consensus_mode
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
@@ -1339,7 +1394,10 @@ class AnalisisTab(QWidget):
         N = self._carga.mode_N
         K = self._carga.mode_K
         M = self._carga.mode_M
-        self._worker = ProcessingWorker(files, N=N, K=K, M=M, batch_size=8)
+        self._worker = ProcessingWorker(
+            files, N=N, K=K, M=M, batch_size=8,
+            consensus_mode=self._current_consensus_mode,
+        )
         self._worker.progress_updated.connect(self._seg.update_progress)
         self._worker.stage_updated.connect(self._seg.update_stage)
         self._worker.stage_updated.connect(self._batch.on_stage_updated)
@@ -1455,10 +1513,11 @@ class AnalisisTab(QWidget):
                 "frames_processed": meta.get("frames_processed"),
             })
         return {
-            "files":        files,
-            "species_seen": list(self._species_seen),
-            "total_frames": self._total_frames,
-            "mode":         self._current_mode,
+            "files":          files,
+            "species_seen":   list(self._species_seen),
+            "total_frames":   self._total_frames,
+            "mode":           self._current_mode,
+            "consensus_mode": self._current_consensus_mode,
         }
 
     def restore_batch(self, summary: dict, records: list[dict]) -> None:
@@ -1518,6 +1577,7 @@ class AnalisisTab(QWidget):
         self._species_seen.clear()
         self._total_frames = 0
         self._current_mode = "Estándar"
+        self._current_consensus_mode = "static"
         self._hero.reset()
         self._seg.reset()
         self._batch.populate([])
@@ -1533,6 +1593,7 @@ class AnalisisTab(QWidget):
             return
 
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
+        self._current_consensus_mode = self._carga.consensus_mode
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)

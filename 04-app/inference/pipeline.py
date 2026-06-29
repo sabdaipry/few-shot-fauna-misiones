@@ -4,12 +4,14 @@ Pipeline de inferencia para clasificación de fauna silvestre.
 Módulo desacoplado de la GUI — testeable desde consola.
 
 Clases:
-    CatalogManager    — centroides, gallery KNN, nombres comunes
-    BioCLIPEmbedder   — extracción de embeddings via open_clip
-    SpeciesClassifier — clasificación por centroide + árbitro KNN
-    VideoProcessor    — procesamiento de video con consenso temporal
+    CatalogManager          — centroides, gallery KNN, nombres comunes
+    BioCLIPEmbedder         — extracción de embeddings via open_clip
+    SpeciesClassifier       — clasificación por centroide + árbitro KNN
+    SlidingWindowConsensus  — consenso deslizante frame a frame
+    VideoProcessor          — procesamiento de video con consenso temporal
 """
 
+import json
 import math
 import pickle
 from collections import Counter
@@ -35,10 +37,23 @@ _REPO_ROOT     = _APP_DIR.parent                   # raíz del repo
 FEATURES_DIR  = _REPO_ROOT / "02-benchmarking" / "data" / "features" / "bioclip_v2"
 DATASET_INDEX = _REPO_ROOT / "02-benchmarking" / "data" / "dataset_index.csv"
 CATALOG_CACHE = _APP_DIR / "data" / "centroides_bioclip_v2.pkl"
+_CONFIG_PATH  = _APP_DIR / "data" / "config.json"
+
+def _load_config() -> dict:
+    try:
+        if _CONFIG_PATH.exists():
+            return json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+_CONFIG = _load_config()
 
 # Umbral calibrado en 03-threshold-optimization (percentil 95 distribución intraclase)
-CONFIDENCE_THRESHOLD = 0.1866
-KNN_K = 5
+CONFIDENCE_THRESHOLD   = float(_CONFIG.get("confidence_threshold",   0.1866))
+KNN_K                  = int(  _CONFIG.get("knn_k",                  5))
+_SLIDING_P_DEFAULT     = int(  _CONFIG.get("sliding_close_quorum_P", 3))
+_SLIDING_THRESHOLD     = float(_CONFIG.get("sliding_close_threshold", CONFIDENCE_THRESHOLD))
 
 
 # ===========================================================================
@@ -322,6 +337,235 @@ class SpeciesClassifier:
 
 
 # ===========================================================================
+# SlidingWindowConsensus
+# ===========================================================================
+
+class SlidingWindowConsensus:
+    """
+    Consenso deslizante con estado persistente.
+
+    - Buffer de los últimos K frames con predicciones y distancias.
+    - Evento confirmado cuando M frames consecutivos coinciden en especie
+      con d <= umbral.
+    - Evento cerrado cuando P frames consecutivos tienen d > umbral.
+    - Parámetros: K (buffer), M (quórum inicio), P (quórum cierre, default=3),
+      umbral=CONFIDENCE_THRESHOLD.
+
+    Uso:
+        consensus = SlidingWindowConsensus(K=10, M=6, catalog=catalog)
+        for pred in frame_predictions:
+            ev = consensus.feed(pred)
+            if ev: events.append(ev)
+        final = consensus.flush()
+        if final: events.append(final)
+    """
+
+    def __init__(
+        self,
+        K:         int,
+        M:         int,
+        P:         int   = _SLIDING_P_DEFAULT,
+        threshold: float = _SLIDING_THRESHOLD,
+        catalog:   "CatalogManager | None" = None,
+    ) -> None:
+        self.K         = K
+        self.M         = M
+        self.P         = P
+        self.threshold = threshold
+        self._catalog  = catalog
+        self._reset()
+
+    # ------------------------------------------------------------------
+    # Estado interno
+
+    def _reset(self) -> None:
+        self._state: str = "idle"                   # "idle" | "active"
+        self._candidate_frames:  list[dict] = []
+        self._candidate_species: Optional[str] = None
+        self._event_frames:  list[dict] = []
+        self._close_counter: int = 0
+        self._last_low_frame: Optional[dict] = None  # último frame con d <= threshold
+
+    def _reset_event(self) -> None:
+        self._state          = "idle"
+        self._event_frames   = []
+        self._close_counter  = 0
+        self._last_low_frame = None
+        self._candidate_frames   = []
+        self._candidate_species  = None
+
+    # ------------------------------------------------------------------
+    # Alimentación frame a frame
+
+    def feed(self, frame_data: dict) -> "Optional[BiologicalEvent]":
+        """
+        Procesa un frame. Devuelve un BiologicalEvent si el evento se cierra, None si no.
+
+        frame_data keys: "frame_idx", "timestamp", "result" (ClassificationResult).
+        """
+        result  = frame_data["result"]
+        species = result.species
+        dist    = result.cosine_distance
+
+        if self._state == "idle":
+            if dist <= self.threshold:
+                if (not self._candidate_frames
+                        or species == self._candidate_species):
+                    self._candidate_species = species
+                    self._candidate_frames.append(frame_data)
+                else:
+                    # Especie distinta — reiniciar candidato desde este frame
+                    self._candidate_frames  = [frame_data]
+                    self._candidate_species = species
+
+                if len(self._candidate_frames) >= self.M:
+                    self._state          = "active"
+                    self._event_frames   = list(self._candidate_frames)
+                    self._last_low_frame = self._candidate_frames[-1]
+                    self._close_counter  = 0
+                    self._candidate_frames  = []
+                    self._candidate_species = None
+            else:
+                # Alta distancia — reiniciar candidato
+                self._candidate_frames  = []
+                self._candidate_species = None
+
+        elif self._state == "active":
+            self._event_frames.append(frame_data)
+            if dist <= self.threshold:
+                self._close_counter  = 0
+                self._last_low_frame = frame_data
+            else:
+                self._close_counter += 1
+                if self._close_counter >= self.P:
+                    event = self._build_event()
+                    self._reset_event()
+                    return event
+
+        return None
+
+    def flush(self) -> "Optional[BiologicalEvent]":
+        """
+        Cierra el evento pendiente al finalizar el video.
+
+        Caso 1 — estado "active": el quórum M se alcanzó y el evento aún
+        no se cerró (el animal seguía en escena al acabarse los frames).
+        Se emite con ambiguous=False.
+
+        Caso 2 — estado "idle" con candidatos: el quórum M nunca se
+        completó, pero había frames con detección acumulándose. Se emite
+        como evento ambiguo (ambiguous=True) para que el usuario pueda
+        revisarlo en la pestaña Validación.
+        """
+        if self._state == "active" and self._event_frames:
+            event = self._build_event()
+            self._reset_event()
+            return event
+
+        if self._state == "idle" and self._candidate_frames:
+            event = self._build_ambiguous_event_from_candidates()
+            self._reset()
+            return event
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Construcción del evento
+
+    def _build_ambiguous_event_from_candidates(self) -> "BiologicalEvent":
+        """
+        Construye un evento ambiguo a partir de los candidatos pendientes en idle.
+
+        Todos los frames en _candidate_frames tienen dist <= threshold y la misma
+        especie (_candidate_species). El evento se marca ambiguous=True porque el
+        quórum M no se alcanzó antes del fin del video.
+        """
+        frames = self._candidate_frames
+        winner = self._candidate_species or frames[0]["result"].species
+        best   = min(frames, key=lambda f: f["result"].cosine_distance)
+
+        names = (
+            self._catalog.get_common_names(winner)
+            if self._catalog else {"es_ar": "", "en": ""}
+        )
+
+        top5 = best["result"].top5_candidates
+        if not any(c.get("species") == winner for c in top5):
+            top5 = [{"species": winner,
+                     "cosine_distance": best["result"].cosine_distance}] + top5
+
+        return BiologicalEvent(
+            species                  = winner,
+            nombre_comun_es_ar       = names["es_ar"],
+            nombre_comun_en          = names["en"],
+            start_time               = frames[0]["timestamp"],
+            end_time                 = frames[-1]["timestamp"],
+            representative_frame_idx = best["frame_idx"],
+            representative_timestamp = best["timestamp"],
+            cosine_distance          = best["result"].cosine_distance,
+            confidence_level         = best["result"].confidence_level,
+            ambiguous                = True,
+            top5_candidates          = top5,
+            consensus_mode           = "sliding",
+            frame_distances          = [f["result"].cosine_distance for f in frames],
+            frame_timestamps         = [f["timestamp"] for f in frames],
+        )
+
+    def _build_event(self) -> "BiologicalEvent":
+        all_frames      = self._event_frames
+        low_dist_frames = [
+            f for f in all_frames
+            if f["result"].cosine_distance <= self.threshold
+        ] or all_frames
+
+        # Especie ganadora: más votada entre frames de baja distancia
+        counts          = Counter(f["result"].species for f in low_dist_frames)
+        winner, _       = counts.most_common(1)[0]
+
+        # Frame representativo: menor distancia entre frames del winner con baja dist
+        winner_frames   = [f for f in low_dist_frames if f["result"].species == winner]
+        best            = min(winner_frames, key=lambda f: f["result"].cosine_distance)
+
+        # start_time: primer frame del evento
+        # end_time:   último frame con d <= threshold (antes del cierre)
+        start_time = all_frames[0]["timestamp"]
+        end_time   = (
+            self._last_low_frame["timestamp"]
+            if self._last_low_frame else all_frames[-1]["timestamp"]
+        )
+
+        frame_distances  = [f["result"].cosine_distance for f in all_frames]
+        frame_timestamps = [f["timestamp"]              for f in all_frames]
+
+        names = (
+            self._catalog.get_common_names(winner)
+            if self._catalog else {"es_ar": "", "en": ""}
+        )
+
+        top5 = best["result"].top5_candidates
+        if not any(c.get("species") == winner for c in top5):
+            top5 = [{"species": winner,
+                     "cosine_distance": best["result"].cosine_distance}] + top5
+
+        return BiologicalEvent(
+            species                  = winner,
+            nombre_comun_es_ar       = names["es_ar"],
+            nombre_comun_en          = names["en"],
+            start_time               = start_time,
+            end_time                 = end_time,
+            representative_frame_idx = best["frame_idx"],
+            representative_timestamp = best["timestamp"],
+            cosine_distance          = best["result"].cosine_distance,
+            confidence_level         = best["result"].confidence_level,
+            ambiguous                = False,
+            top5_candidates          = top5,
+            consensus_mode           = "sliding",
+            frame_distances          = frame_distances,
+            frame_timestamps         = frame_timestamps,
+        )
+
+
+# ===========================================================================
 # VideoProcessor
 # ===========================================================================
 
@@ -337,7 +581,10 @@ class BiologicalEvent:
     cosine_distance:          float  # del frame representativo
     confidence_level:         str    # del frame representativo ("alta" | "baja")
     ambiguous:                bool
-    top5_candidates:          list[dict] = field(default_factory=list)
+    top5_candidates:          list[dict]  = field(default_factory=list)
+    consensus_mode:           str         = "static"   # "static" | "sliding"
+    frame_distances:          list[float] = field(default_factory=list)
+    frame_timestamps:         list[float] = field(default_factory=list)
 
 
 class VideoProcessor:
@@ -356,20 +603,24 @@ class VideoProcessor:
 
     def __init__(
         self,
-        embedder:   BioCLIPEmbedder,
-        classifier: SpeciesClassifier,
-        N: int = 30,
-        K: int = 10,
-        M: int = 6,
-        batch_size: int = 8,
+        embedder:       BioCLIPEmbedder,
+        classifier:     SpeciesClassifier,
+        N:              int  = 30,
+        K:              int  = 10,
+        M:              int  = 6,
+        P:              int  = _SLIDING_P_DEFAULT,
+        batch_size:     int  = 8,
+        consensus_mode: str  = "static",
     ) -> None:
-        self._embedder   = embedder
-        self._classifier = classifier
-        self._catalog    = classifier._catalog
-        self.N          = N
-        self.K          = K
-        self.M          = M
-        self.batch_size = batch_size
+        self._embedder      = embedder
+        self._classifier    = classifier
+        self._catalog       = classifier._catalog
+        self.N              = N
+        self.K              = K
+        self.M              = M
+        self.P              = P
+        self.batch_size     = batch_size
+        self.consensus_mode = consensus_mode
 
     def process(
         self,
@@ -438,6 +689,8 @@ class VideoProcessor:
 
         _flush()
         cap.release()
+        if self.consensus_mode == "sliding":
+            return self._build_events_sliding(frame_predictions)
         return self._build_events(frame_predictions)
 
     # ------------------------------------------------------------------
@@ -498,8 +751,45 @@ class VideoProcessor:
                 confidence_level         = best["result"].confidence_level,
                 ambiguous                = ambiguous,
                 top5_candidates          = top5,
+                consensus_mode           = "static",
+                frame_distances          = [w["result"].cosine_distance for w in window],
+                frame_timestamps         = [w["timestamp"] for w in window],
             ))
 
             i += self.K
 
+        return events
+
+    # ------------------------------------------------------------------
+    # Construcción de eventos con ventana deslizante
+    # ------------------------------------------------------------------
+
+    def _build_events_sliding(self, predictions: list[dict]) -> list[BiologicalEvent]:
+        consensus = SlidingWindowConsensus(
+            K=self.K, M=self.M, P=self.P,
+            threshold=_SLIDING_THRESHOLD,
+            catalog=self._catalog,
+        )
+        events: list[BiologicalEvent] = []
+        for pred in predictions:
+            ev = consensus.feed(pred)
+            if ev is not None:
+                events.append(ev)
+
+        # Capturar estado antes de flush (flush llama a _reset y limpia el estado)
+        _state_pre  = consensus._state
+        _cands_pre  = len(consensus._candidate_frames)
+
+        # Cerrar evento activo o candidatos pendientes al terminar el video
+        final = consensus.flush()
+        if final is not None:
+            events.append(final)
+
+        print(
+            f"[_build_events_sliding] frames={len(predictions)}"
+            f"  state_pre_flush={_state_pre}"
+            f"  candidates_pendientes={_cands_pre}"
+            f"  flush_emitio={'si' if final is not None else 'no'}"
+            f"  eventos_emitidos={len(events)}"
+        )
         return events
