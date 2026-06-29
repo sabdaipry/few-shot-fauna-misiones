@@ -306,7 +306,7 @@ class SpeciesClassifier:
                 decisor            = "BioCLIP",
             )
 
-        if best_dist > REJECTION_THRESHOLD:
+        if best_dist >= REJECTION_THRESHOLD:
             names = self._catalog.get_common_names(best_species)
             logger.debug(
                 "[SpeciesClassifier] Frame rechazado: %s d=%.4f > %.4f",
