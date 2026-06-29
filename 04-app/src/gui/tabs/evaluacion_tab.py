@@ -1200,10 +1200,15 @@ class _UnknownSpeciesCard(QFrame):
             self._rebuild(aggregated)
 
     def _aggregate(self, records: list[dict]) -> dict[str, dict]:
-        """Agrupa por custom_species → {count, files}."""
+        """Agrupa por custom_species → {count, files}, solo registros 'Desconocida'."""
         result: dict[str, dict] = {}
         for rec in records:
-            sp = rec.get("validation", {}).get("custom_species")
+            val = rec.get("validation", {})
+            if val.get("state") != "validated":
+                continue
+            if val.get("category") != "Desconocida":
+                continue
+            sp = val.get("custom_species")
             if not sp:
                 continue
             if sp not in result:

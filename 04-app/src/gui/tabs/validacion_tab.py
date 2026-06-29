@@ -679,8 +679,26 @@ class _ValidationCell(QWidget):
         self._combo.clear()
         self._combo.addItem("— Seleccionar —")
 
-        top5 = getattr(self._record["event"], "top5_candidates", [])
-        for cand in top5:
+        event     = self._record["event"]
+        top5      = getattr(event, "top5_candidates", [])
+        predicted = getattr(event, "species", "")
+
+        # Garantizar que la especie predicha sea siempre la primera opción.
+        # Cubre eventos nuevos (donde pipeline ya la insertó) y sesiones guardadas
+        # antes del fix donde KNN/Consenso podían no estar en top5_candidates.
+        if predicted and (not top5 or top5[0].get("species") != predicted):
+            pred_dist = getattr(event, "cosine_distance", 0.0)
+            for cand in top5:
+                if cand.get("species") == predicted:
+                    pred_dist = cand.get("cosine_distance", pred_dist)
+                    break
+            self._display_candidates = [
+                {"species": predicted, "cosine_distance": pred_dist}
+            ] + [c for c in top5 if c.get("species") != predicted]
+        else:
+            self._display_candidates = list(top5)
+
+        for cand in self._display_candidates:
             sp   = cand.get("species", "")
             dist = cand.get("cosine_distance", 0.0)
             self._combo.addItem(f"{sp} (d={dist:.3f})")
@@ -695,7 +713,7 @@ class _ValidationCell(QWidget):
         if text == "— Seleccionar —":
             return
 
-        top5 = getattr(self._record["event"], "top5_candidates", [])
+        candidates = getattr(self, "_display_candidates", getattr(self._record["event"], "top5_candidates", []))
         custom = None
 
         if text == "Ingreso manual...":
@@ -750,9 +768,18 @@ class _ValidationCell(QWidget):
             if dlg.exec() != QDialog.DialogCode.Accepted or not le.text().strip():
                 return
             custom = le.text().strip()
-            category = f"Conocida — {custom}"
-        elif 1 <= idx <= len(top5):
-            # idx 1 → top-1 = "Correcta"; idx 2-5 → "Top 5"
+            catalog_species = [e.get("species", "") for e in self._species_catalog]
+            top5_species    = [c.get("species", "") for c in candidates]
+            in_catalog = custom.lower() in [s.lower() for s in catalog_species if s]
+            in_top5    = custom.lower() in [s.lower() for s in top5_species if s]
+            if not in_catalog:
+                category = "Desconocida"
+            elif in_top5:
+                category = "Top 5"
+            else:
+                category = "Conocida fuera del top 5"
+        elif 1 <= idx <= len(candidates):
+            # idx 1 → top-1 = "Correcta"; idx 2+ → "Top 5"
             category = "Correcta" if idx == 1 else "Top 5"
         else:
             category = text  # "Desconocida" o "Vacío / Ruido"
@@ -760,8 +787,8 @@ class _ValidationCell(QWidget):
         # Especie que el usuario confirmó como correcta (para mostrar en panel)
         if custom:
             validated_sp: "str | None" = custom
-        elif 1 <= idx <= len(top5):
-            validated_sp = top5[idx - 1].get("species", "")
+        elif 1 <= idx <= len(candidates):
+            validated_sp = candidates[idx - 1].get("species", "")
         else:
             validated_sp = text  # "Desconocida" o "Vacío / Ruido"
 

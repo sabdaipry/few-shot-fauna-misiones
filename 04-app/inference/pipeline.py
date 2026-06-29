@@ -304,6 +304,13 @@ class SpeciesClassifier:
         knn_winner = max(species_weights, key=species_weights.get)
         names      = self._catalog.get_common_names(knn_winner)
 
+        # KNN winner puede no estar en top5 (que refleja distancias al centroide).
+        # Insertarlo al frente para que aparezca en el dropdown de validación.
+        if not any(c["species"] == knn_winner for c in top5):
+            knn_winner_idx  = self._species_index.index(knn_winner)
+            knn_winner_dist = float(dists[knn_winner_idx])
+            top5 = [{"species": knn_winner, "cosine_distance": knn_winner_dist}] + top5
+
         return ClassificationResult(
             species            = knn_winner,
             nombre_comun_es_ar = names["es_ar"],
@@ -459,6 +466,26 @@ class VideoProcessor:
 
             names = self._catalog.get_common_names(winner)
 
+            top5 = best["result"].top5_candidates
+            if not any(c.get("species") == winner for c in top5):
+                # winner no está en el top5 del frame representativo (consenso ambiguo
+                # o winner ganó por KNN). Buscar su distancia en los frames que votaron
+                # por él; si no se encuentra, usar la distancia del frame representativo.
+                winner_dist: "float | None" = None
+                for w in window:
+                    if w["result"].species != winner:
+                        continue
+                    for cand in w["result"].top5_candidates:
+                        if cand.get("species") == winner:
+                            d = cand.get("cosine_distance")
+                            if winner_dist is None or d < winner_dist:
+                                winner_dist = d
+                            break
+                top5 = [
+                    {"species": winner,
+                     "cosine_distance": winner_dist if winner_dist is not None else best["result"].cosine_distance}
+                ] + top5
+
             events.append(BiologicalEvent(
                 species                  = winner,
                 nombre_comun_es_ar       = names["es_ar"],
@@ -470,7 +497,7 @@ class VideoProcessor:
                 cosine_distance          = best["result"].cosine_distance,
                 confidence_level         = best["result"].confidence_level,
                 ambiguous                = ambiguous,
-                top5_candidates          = best["result"].top5_candidates,
+                top5_candidates          = top5,
             ))
 
             i += self.K
