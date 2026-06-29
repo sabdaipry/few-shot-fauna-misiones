@@ -146,7 +146,7 @@ class _HeroCard(QFrame):
         self.setStyleSheet(card_qss("herocard"))
 
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(36, 28, 36, 28)
+        outer.setContentsMargins(28, 16, 28, 16)
         outer.setSpacing(48)
 
         # Columna izquierda
@@ -248,7 +248,7 @@ class _CargaCard(QFrame):
         super().__init__(parent)
         self.setObjectName("cargacard")
         self.setStyleSheet(card_qss("cargacard"))
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._selected_files: list[Path] = []
         self._is_processing: bool = False
@@ -465,7 +465,7 @@ class _SeguimientoCard(QFrame):
         super().__init__(parent)
         self.setObjectName("segucard")
         self.setStyleSheet(card_qss("segucard"))
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
@@ -827,16 +827,17 @@ class _BatchCard(QFrame):
             ["ARCHIVO", "ESTADO", "PROGRESO", "ESPECIES", "DETALLE", "ACCIONES"]
         )
         hh = self._table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(1, 110)
-        self._table.setColumnWidth(2, 150)
+        self._table.setColumnWidth(0, 180)
+        self._table.setColumnWidth(1, 120)
+        self._table.setColumnWidth(2, 140)
         self._table.setColumnWidth(3, 80)
-        self._table.setColumnWidth(5, 200)
+        self._table.setColumnWidth(5, 60)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -978,9 +979,9 @@ class _BatchCard(QFrame):
         """)
         btn_resume.clicked.connect(lambda: self.resume_requested.emit(name))
 
+        hl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hl.addWidget(btn_ver)
         hl.addWidget(btn_resume)
-        hl.addStretch()
         return w, btn_resume, btn_ver
 
     # ── API pública ──────────────────────────────────────────────────────
@@ -1026,7 +1027,9 @@ class _BatchCard(QFrame):
         it3.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self._table.setItem(r, 3, it3)
 
-        self._table.setItem(r, 4, QTableWidgetItem("—"))
+        it4 = QTableWidgetItem("—")
+        it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table.setItem(r, 4, it4)
 
         act_w, btn_resume, btn_ver = self._mk_actions_cell(name)
         btn_ver.setEnabled(False)
@@ -1277,7 +1280,7 @@ class AnalisisTab(QWidget):
         self._current_mode: str = "Estándar"
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(32, 24, 32, 32)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(16)
 
         # Hero
@@ -1287,6 +1290,7 @@ class AnalisisTab(QWidget):
         # Dos cards lado a lado
         mid_row = QHBoxLayout()
         mid_row.setSpacing(16)
+        mid_row.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self._carga = _CargaCard()
         self._seg   = _SeguimientoCard()

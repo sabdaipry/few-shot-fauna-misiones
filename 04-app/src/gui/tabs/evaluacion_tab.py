@@ -1650,7 +1650,7 @@ class EvaluacionTab(QWidget):
         self.setStyleSheet("background: transparent;")
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(32, 24, 32, 32)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(16)
 
         # ── Header — dos cards lado a lado ────────────────────────────────
@@ -1683,10 +1683,17 @@ class EvaluacionTab(QWidget):
         self._unknown_card  = _UnknownSpeciesCard()
         self._empty_state   = _EmptyState()
 
-        body_col.addWidget(self._latency_card)
+        # Orden: error → multi → fila horizontal (latencia izq + species-fuera-catálogo der)
         body_col.addWidget(self._error_card)
         body_col.addWidget(self._multi_card)
-        body_col.addWidget(self._unknown_card)
+
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(16)
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.addWidget(self._latency_card,  1)
+        bottom_row.addWidget(self._unknown_card,  1)
+        body_col.addLayout(bottom_row)
+
         body_col.addWidget(self._charts_card)
         body_col.addWidget(self._empty_state)
         body_col.addStretch()
@@ -1699,11 +1706,11 @@ class EvaluacionTab(QWidget):
         outer.addLayout(body_row)
 
         # ── Estado inicial (sin datos) ────────────────────────────────────
-        self._latency_card.hide()
         self._error_card.hide()
-        self._charts_card.hide()
         self._multi_card.hide()
+        self._latency_card.hide()
         self._unknown_card.hide()
+        self._charts_card.hide()
 
         # ── Conexiones de señales ─────────────────────────────────────────
         self._error_card.detail_requested.connect(self._on_error_detail_requested)

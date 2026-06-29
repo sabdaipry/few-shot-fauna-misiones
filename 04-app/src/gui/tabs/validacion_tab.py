@@ -20,6 +20,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     Qt,
+    QSize,
     QTimer,
     Signal,
 )
@@ -65,6 +66,7 @@ from ..styles import (
     card_qss,
     icon_eye_btn,
     icon_trash_btn,
+    magnifier_icon,
     section_label_qss,
     title_qss,
     validation_badge_qss,
@@ -828,6 +830,7 @@ class _SidePanel(QFrame):
         self._anim.setDuration(260)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._anim_connected: bool = False
+        self._icon_magnifier = magnifier_icon(TEXT_PRIMARY, 14)
 
         self._current_record: Optional[dict] = None
         self._current_row_idx: int = -1
@@ -1165,7 +1168,14 @@ class _SidePanel(QFrame):
         # Botón clip o imagen
         _is_image = filepath is not None and filepath.suffix.lower() in {".jpg", ".jpeg", ".png"}
         _is_video = filepath is not None and filepath.suffix.lower() in {".mp4", ".avi", ".mov"}
-        self._btn_clip.setText("🔍 Abrir imagen" if _is_image else "▶ Ver clip completo")
+        if _is_image and self._icon_magnifier:
+            self._btn_clip.setIcon(self._icon_magnifier)
+            self._btn_clip.setIconSize(QSize(14, 14))
+            self._btn_clip.setText("Abrir imagen")
+        else:
+            from PySide6.QtGui import QIcon as _QIcon
+            self._btn_clip.setIcon(_QIcon())
+            self._btn_clip.setText("▶ Ver clip completo")
         self._btn_clip.setEnabled(_is_image or _is_video)
 
         # Distancia coseno
@@ -1633,18 +1643,19 @@ class _RegistrosSection(QFrame):
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(0, 130)
+        self._table.setColumnWidth(0, 140)
         self._table.setColumnWidth(1, 90)
-        self._table.setColumnWidth(4, 110)
-        self._table.setColumnWidth(5, 86)
-        self._table.setColumnWidth(6, 250)
-        self._table.setColumnWidth(7, 150)
+        self._table.setColumnWidth(2, 140)
+        self._table.setColumnWidth(3, 160)
+        self._table.setColumnWidth(4, 100)
+        self._table.setColumnWidth(5, 80)
+        self._table.setColumnWidth(7, 70)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -1793,6 +1804,7 @@ class _RegistrosSection(QFrame):
             act_l = QHBoxLayout(act_w)
             act_l.setContentsMargins(4, 2, 4, 2)
             act_l.setSpacing(4)
+            act_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             btn_ver = icon_eye_btn("Ver detalle")
             btn_del = icon_trash_btn("Eliminar")
@@ -1802,7 +1814,6 @@ class _RegistrosSection(QFrame):
 
             act_l.addWidget(btn_ver)
             act_l.addWidget(btn_del)
-            act_l.addStretch()
             self._table.setCellWidget(local_idx, 7, act_w)
 
             if global_idx == self._active_global_idx:
@@ -1948,7 +1959,7 @@ class ValidacionTab(QWidget):
         self._panel_row_idx: int = -1
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(32, 24, 32, 32)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(16)
 
         # ── Header — dos cards lado a lado ────────────────────────────────

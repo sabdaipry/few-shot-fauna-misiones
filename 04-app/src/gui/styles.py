@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QPushButton
 # ---------------------------------------------------------------------------
 ACCENT          = "#99e17a"   # verde lima — logo, bordes, acentos
 TEXT_PRIMARY    = "#edefec"   # texto principal
-TAB_ACTIVE_BG   = "#1f2c1d"   # pestaña activa
+TAB_ACTIVE_BG   = "#2d5a1f"   # pestaña activa
 TAB_INACTIVE_BG = "#090909"   # pestañas inactivas
 
 # Semánticos
@@ -64,6 +64,13 @@ VALIDATION_COLORS: dict[str, tuple[str, str]] = {
 # SVG inline — plantillas para íconos de acción en tablas
 # ---------------------------------------------------------------------------
 
+_SVG_MAGNIFIER = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2"'
+    ' xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="11" cy="11" r="8"/>'
+    '<line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+    '</svg>'
+)
 _SVG_EYE = (
     '<svg viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="2"'
     ' xmlns="http://www.w3.org/2000/svg">'
@@ -141,6 +148,21 @@ def icon_trash_btn(tooltip: str = "Eliminar",
     return _HoverIconBtn(_SVG_TRASH, tooltip, btn_size, icon_size)
 
 
+def icon_magnifier_btn(tooltip: str = "Abrir imagen",
+                       btn_size: int = 28, icon_size: int = 16) -> _HoverIconBtn:
+    """Botón con ícono de lupa minimalista para 'Abrir imagen'."""
+    return _HoverIconBtn(_SVG_MAGNIFIER, tooltip, btn_size, icon_size)
+
+
+def magnifier_icon(color: str = TEXT_PRIMARY, size: int = 16):
+    """Renderiza el ícono de lupa como QIcon. Devuelve None si falla."""
+    px = _svg_to_pixmap(_SVG_MAGNIFIER, color, size)
+    if px:
+        from PySide6.QtGui import QIcon
+        return QIcon(px)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # QSS: navbar
 # ---------------------------------------------------------------------------
@@ -195,14 +217,15 @@ CARD_QSS = card_qss("card")
 
 def tab_button_qss(active: bool) -> str:
     """QSS para un botón de pestaña del navbar, activo o inactivo."""
-    bg       = TAB_ACTIVE_BG if active else TAB_INACTIVE_BG
-    hover_bg = "#2a3d27"     if active else "#1a1a1a"
+    bg         = TAB_ACTIVE_BG if active else TAB_INACTIVE_BG
+    hover_bg   = "#3a7028"     if active else "#1a1a1a"
+    border_col = ACCENT        if active else "rgba(153, 225, 122, 80)"
     return f"""
         QPushButton {{
             background-color: {bg};
             color:            {TEXT_PRIMARY};
-            border:           1px solid {ACCENT};
-            border-radius:    6px;
+            border:           1px solid {border_col};
+            border-radius:    20px;
             font-size:        13px;
             font-weight:      600;
             padding:          8px 22px;
