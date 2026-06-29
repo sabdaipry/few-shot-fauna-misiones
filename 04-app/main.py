@@ -6,6 +6,8 @@ Uso:
     python main.py
 """
 
+import json
+import logging
 import sys
 from pathlib import Path
 
@@ -19,8 +21,30 @@ from PySide6.QtWidgets import QApplication
 
 from src.gui.main_window import MainWindow
 
+_app_data_dir = Path(__file__).resolve().parent / "data"
+_config_path  = _app_data_dir / "config.json"
+
+def _setup_logging() -> None:
+    try:
+        config = json.loads(_config_path.read_text(encoding="utf-8"))
+    except Exception:
+        config = {}
+
+    if config.get("debug_mode", False):
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s [%(name)s] %(message)s",
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(_app_data_dir / "sareko_debug.log", encoding="utf-8"),
+            ],
+        )
+    else:
+        logging.basicConfig(level=logging.WARNING)
+
 
 def main() -> None:
+    _setup_logging()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 

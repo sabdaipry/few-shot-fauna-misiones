@@ -12,6 +12,7 @@ Clases:
 """
 
 import json
+import logging
 import math
 import pickle
 from collections import Counter
@@ -48,6 +49,8 @@ def _load_config() -> dict:
     return {}
 
 _CONFIG = _load_config()
+
+logger = logging.getLogger("sareko.pipeline")
 
 # Umbral calibrado en 03-threshold-optimization (percentil 95 distribución intraclase)
 CONFIDENCE_THRESHOLD   = float(_CONFIG.get("confidence_threshold",   0.1866))
@@ -97,7 +100,7 @@ class CatalogManager:
         self._common_names   = data["common_names"]
 
     def _build_and_cache(self) -> None:
-        print("[CatalogManager] Construyendo catálogo desde embeddings...")
+        logger.debug("[CatalogManager] Construyendo catálogo desde embeddings...")
         index_df = pd.read_csv(DATASET_INDEX)
 
         # Nombres comunes (una entrada por especie)
@@ -133,7 +136,7 @@ class CatalogManager:
                 gallery_labels.append(row["species"])
 
         if missing:
-            print(f"[CatalogManager] Advertencia: {missing} archivos .npy no encontrados.")
+            logger.warning("[CatalogManager] %d archivos .npy no encontrados.", missing)
 
         # Centroides: media de embeddings L2-normalizados, re-normalizada
         all_normed     = normalize(np.vstack(all_embs).astype(np.float64), norm="l2")
@@ -163,7 +166,7 @@ class CatalogManager:
                 "gallery_labels":     self._gallery_labels,
                 "common_names":       self._common_names,
             }, f)
-        print(f"[CatalogManager] Catálogo guardado en {CATALOG_CACHE}")
+        logger.debug("[CatalogManager] Catálogo guardado en %s", CATALOG_CACHE)
 
     # ------------------------------------------------------------------
     # API pública
@@ -785,11 +788,10 @@ class VideoProcessor:
         if final is not None:
             events.append(final)
 
-        print(
-            f"[_build_events_sliding] frames={len(predictions)}"
-            f"  state_pre_flush={_state_pre}"
-            f"  candidates_pendientes={_cands_pre}"
-            f"  flush_emitio={'si' if final is not None else 'no'}"
-            f"  eventos_emitidos={len(events)}"
+        logger.debug(
+            "[_build_events_sliding] frames=%d  state_pre_flush=%s  "
+            "candidates_pendientes=%d  flush_emitio=%s  eventos_emitidos=%d",
+            len(predictions), _state_pre, _cands_pre,
+            "si" if final is not None else "no", len(events),
         )
         return events
