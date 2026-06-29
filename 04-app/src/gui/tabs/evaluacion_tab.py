@@ -687,7 +687,7 @@ class _LatencyCard(QFrame):
         self._table = QTableWidget(0, 7)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "TIPO", "DURACIÓN", "MODO",
-            "FRAMES ANALIZADOS", "TIEMPO PROCESAMIENTO", "FACTOR",
+            "FRAMES", "T. PROCESO", "FACTOR",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -701,9 +701,9 @@ class _LatencyCard(QFrame):
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 80)
         self._table.setColumnWidth(3, 90)
-        self._table.setColumnWidth(4, 120)
-        self._table.setColumnWidth(5, 150)
-        self._table.setColumnWidth(6, 80)
+        self._table.setColumnWidth(4, 80)
+        self._table.setColumnWidth(5, 100)
+        self._table.setColumnWidth(6, 70)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
