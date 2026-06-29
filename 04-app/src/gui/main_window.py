@@ -15,8 +15,8 @@ Estructura:
 import csv
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QIcon, QPainter, QPixmap, QSize
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
     QFrame,
