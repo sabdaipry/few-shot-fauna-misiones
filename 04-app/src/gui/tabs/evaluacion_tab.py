@@ -929,11 +929,12 @@ class _MultispeciesCard(QFrame):
 
     detail_requested = Signal(dict, int)   # record, índice en la lista global de records
 
-    def __init__(self, parent=None):
+    def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
         self.setObjectName("multispeciescard")
         self.setStyleSheet(card_qss("multispeciescard"))
 
+        self._species_catalog = species_catalog or []
         self._records:     list[dict] = []   # sólo los multi_species=True
         self._all_records: list[dict] = []   # referencia completa para calcular índice global
 
@@ -1009,6 +1010,43 @@ class _MultispeciesCard(QFrame):
         if has:
             self._rebuild()
 
+    def _resolve_species(self, record: dict) -> tuple[str, str]:
+        """
+        Retorna (nombre_comun, nombre_cientifico) priorizando la especie validada
+        por el usuario; si no fue validado, usa la especie predicha por el pipeline.
+        nombre_comun es "" cuando no hay nombre común disponible.
+        """
+        val = record.get("validation", {})
+        ev  = record["event"]
+
+        if val.get("state") == "validated":
+            sp = val.get("validated_species") or val.get("custom_species")
+            if sp and sp not in ("Desconocida", "Vacío / Ruido"):
+                common = ""
+                for entry in self._species_catalog:
+                    if entry.get("species") == sp:
+                        for key in ("nombre_comun_es_ar", "nombre_comun_en"):
+                            c = entry.get(key, "")
+                            if c and str(c).lower() not in ("", "nan", "none"):
+                                common = str(c)
+                                break
+                        break
+                if not common and sp == getattr(ev, "species", ""):
+                    for attr in ("nombre_comun_es_ar", "nombre_comun_en"):
+                        c = getattr(ev, attr, "")
+                        if c and str(c).lower() not in ("", "nan", "none"):
+                            common = str(c)
+                            break
+                return common, sp
+
+        common = ""
+        for attr in ("nombre_comun_es_ar", "nombre_comun_en"):
+            c = getattr(ev, attr, "")
+            if c and str(c).lower() not in ("", "nan", "none"):
+                common = str(c)
+                break
+        return common, getattr(ev, "species", "—")
+
     def _rebuild(self) -> None:
         self._table.setRowCount(0)
         for i, record in enumerate(self._records):
@@ -1032,25 +1070,32 @@ class _MultispeciesCard(QFrame):
             it1.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 1, it1)
 
-            # Col 2 — Especie principal: nombre común + nombre científico en itálica
-            common   = _get_common_name(event)
-            sci_name = getattr(event, "species", "—")
+            # Col 2 — Especie principal: validada por usuario o predicha por pipeline
+            common, sci_name = self._resolve_species(record)
             cell_w   = QWidget()
             cell_w.setStyleSheet("background: transparent;")
             cell_l   = QVBoxLayout(cell_w)
             cell_l.setContentsMargins(8, 3, 8, 3)
             cell_l.setSpacing(1)
-            lbl_common = QLabel(common)
-            lbl_common.setStyleSheet(
-                f"color: {TEXT_PRIMARY}; font-size: 12px; background: transparent;"
-            )
-            lbl_sci = QLabel(sci_name)
-            lbl_sci.setStyleSheet(
-                f"color: {ACCENT}; font-size: 10px; font-style: italic;"
-                " background: transparent;"
-            )
-            cell_l.addWidget(lbl_common)
-            cell_l.addWidget(lbl_sci)
+            if common:
+                lbl_common = QLabel(common)
+                lbl_common.setStyleSheet(
+                    f"color: {TEXT_PRIMARY}; font-size: 12px; background: transparent;"
+                )
+                lbl_sci = QLabel(sci_name)
+                lbl_sci.setStyleSheet(
+                    f"color: {ACCENT}; font-size: 10px; font-style: italic;"
+                    " background: transparent;"
+                )
+                cell_l.addWidget(lbl_common)
+                cell_l.addWidget(lbl_sci)
+            else:
+                lbl_sci = QLabel(sci_name)
+                lbl_sci.setStyleSheet(
+                    f"color: {TEXT_PRIMARY}; font-size: 12px; font-style: italic;"
+                    " background: transparent;"
+                )
+                cell_l.addWidget(lbl_sci)
             self._table.setCellWidget(i, 2, cell_w)
 
             # Col 3 — Especies adicionales
@@ -1675,7 +1720,7 @@ class EvaluacionTab(QWidget):
         self._latency_card  = _LatencyCard()
         self._error_card    = _ErrorEvalCard()
         self._charts_card   = _ChartsCard()
-        self._multi_card    = _MultispeciesCard()
+        self._multi_card    = _MultispeciesCard(self._species_catalog)
         self._unknown_card  = _UnknownSpeciesCard()
         self._empty_state   = _EmptyState()
 
@@ -1758,17 +1803,20 @@ class EvaluacionTab(QWidget):
         """Actualiza todos los indicadores, cards y gráficos."""
         self._current_records = records
 
+        n_session_validations = sum(
+            1 for r in records
+            if r.get("validation", {}).get("state") == "validated"
+        )
+
         if history:
             n_corridas     = history.get("total_runs",        0)
             n_registros    = history.get("total_records",     0)
-            n_validaciones = history.get("total_validations", 0)
+            # append_history() corre al terminar el análisis (records pending) → las validaciones de la sesión actual no están en history.json
+            n_validaciones = history.get("total_validations", 0) + n_session_validations
         else:
             n_corridas     = len(batch_summary.get("files", []))
             n_registros    = len(records)
-            n_validaciones = sum(
-                1 for r in records
-                if r.get("validation", {}).get("state") == "validated"
-            )
+            n_validaciones = n_session_validations
 
         session_records = len(records)
         session_files   = len(batch_summary.get("files", []))
