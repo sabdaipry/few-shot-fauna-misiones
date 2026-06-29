@@ -259,8 +259,12 @@ class _CargaCard(QFrame):
 
         sec = QLabel("CARGA Y EJECUCIÓN")
         sec.setStyleSheet(section_label_qss())
-        layout.addWidget(sec)
-        layout.addWidget(_sep())
+        hdr = QVBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(4)
+        hdr.addWidget(sec)
+        hdr.addWidget(_sep())
+        layout.addLayout(hdr)
 
         # Botones de selección
         btn_row = QHBoxLayout()
@@ -632,6 +636,12 @@ class _SeguimientoCard(QFrame):
                 f"color: {color}; font-size: 14px; background: transparent;"
             )
 
+    def reset_stages(self) -> None:
+        for pb in self._stage_bars.values():
+            pb.setValue(0)
+        for lbl in self._stage_labels.values():
+            lbl.setText("0 %")
+
     def reset(self) -> None:
         self._progress_bar.setValue(0)
         self._lbl_pct.setText("0 %")
@@ -639,10 +649,7 @@ class _SeguimientoCard(QFrame):
         self._badge.setStyleSheet(badge_qss(NEUTRAL))
         for v in self._metric_vals:
             v.setText("—")
-        for pb in self._stage_bars.values():
-            pb.setValue(0)
-        for lbl in self._stage_labels.values():
-            lbl.setText("0 %")
+        self.reset_stages()
         self.set_frame_extraction_na(False)
 
 
@@ -1391,6 +1398,7 @@ class AnalisisTab(QWidget):
 
     def _on_file_started(self, name: str) -> None:
         self._batch.on_file_started(name)
+        self._seg.reset_stages()
         is_image = Path(name).suffix.lower() in {".jpg", ".jpeg", ".png"}
         self._seg.set_frame_extraction_na(is_image)
 
