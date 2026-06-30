@@ -78,8 +78,9 @@ class MotionFilter:
     def __init__(
         self,
         min_contour_area: int = 500,
-        history:          int = 500,
+        history:          int = 120,
         var_threshold:    int = 16,
+        scale_to:         "tuple[int, int] | None" = (320, 240),
     ) -> None:
         self._subtractor = cv2.createBackgroundSubtractorMOG2(
             history=history, varThreshold=var_threshold, detectShadows=False
@@ -88,14 +89,20 @@ class MotionFilter:
         self._warmup     = history   # frames totales hasta que el modelo sea confiable
         self._fed        = 0
         self._last_area  = 0.0
+        self._scale_to   = scale_to
 
     def update(self, frame: np.ndarray) -> bool:
         """
         Alimenta el subtractor con el frame y devuelve si tiene movimiento relevante.
 
+        Si scale_to está configurado, aplica MOG2 sobre una versión reducida del frame
+        (más rápido; la detección de movimiento no requiere resolución completa).
+
         Durante el calentamiento (primeros `history` frames), devuelve True
         incondicionalmente y _last_area queda como inf para indicar que no fue filtrado.
         """
+        if self._scale_to is not None:
+            frame = cv2.resize(frame, self._scale_to, interpolation=cv2.INTER_NEAREST)
         mask = self._subtractor.apply(frame)
         self._fed += 1
         if self._fed <= self._warmup:
@@ -616,6 +623,34 @@ class SlidingWindowConsensus:
 
         return None
 
+    def notify_no_detection(
+        self, frame_idx: int, timestamp: float
+    ) -> "Optional[BiologicalEvent]":
+        """
+        Notifica un frame sin detección confiable que no pasó por BioCLIP
+        (por ejemplo, descartado por el filtro MOG2).
+
+        Equivale a recibir un frame con d > threshold:
+        - En 'idle': resetea los candidatos acumulados.
+        - En 'active': incrementa el contador de cierre; si alcanza P,
+          cierra y emite el evento.
+
+        El frame no se agrega a _event_frames; solo avanza el mecanismo
+        de cierre para que el evento no quede abierto indefinidamente.
+        """
+        if self._state == "idle":
+            self._candidate_frames  = []
+            self._candidate_species = None
+            return None
+
+        # state == "active"
+        self._close_counter += 1
+        if self._close_counter >= self.P:
+            event = self._build_event()
+            self._reset_event()
+            return event
+        return None
+
     # ------------------------------------------------------------------
     # Construcción del evento
 
@@ -896,7 +931,7 @@ class VideoProcessor:
                         progress_callback(processed, est_sampled)
 
         if self.consensus_mode == "sliding":
-            events = self._build_events_sliding(frame_predictions)
+            events = self._build_events_sliding(frame_predictions, motion_filtered_info)
         else:
             events = self._build_events(frame_predictions)
 
@@ -1036,21 +1071,46 @@ class VideoProcessor:
     # Construcción de eventos con ventana deslizante
     # ------------------------------------------------------------------
 
-    def _build_events_sliding(self, predictions: list[dict]) -> list[BiologicalEvent]:
+    def _build_events_sliding(
+        self,
+        predictions:          list[dict],
+        motion_filtered_info: list[dict] | None = None,
+    ) -> list[BiologicalEvent]:
+        """
+        Construye eventos con consenso deslizante.
+
+        Si motion_filtered_info está presente, los frames descartados por MOG2
+        se intercalan cronológicamente en el stream y se notifican al consenso
+        como "no detection" (equivalente a d > threshold). Esto evita que un
+        evento confirmado quede abierto indefinidamente cuando los frames
+        posteriores son filtrados por MOG2 antes de llegar a BioCLIP.
+        """
         consensus = SlidingWindowConsensus(
             K=self.K, M=self.M, P=self.P,
             threshold=_SLIDING_THRESHOLD,
             catalog=self._catalog,
         )
         events: list[BiologicalEvent] = []
-        for pred in predictions:
-            ev = consensus.feed(pred)
+
+        # Construir stream unificado: predicciones clasificadas + frames MOG2
+        no_detect_map: dict[int, float] = (
+            {info["frame_idx"]: info["timestamp"] for info in motion_filtered_info}
+            if motion_filtered_info else {}
+        )
+        pred_map: dict[int, dict] = {p["frame_idx"]: p for p in predictions}
+        all_indices = sorted(set(pred_map.keys()) | set(no_detect_map.keys()))
+
+        for idx in all_indices:
+            if idx in pred_map:
+                ev = consensus.feed(pred_map[idx])
+            else:
+                ev = consensus.notify_no_detection(idx, no_detect_map[idx])
             if ev is not None:
                 events.append(ev)
 
         # Capturar estado antes de flush (flush llama a _reset y limpia el estado)
-        _state_pre  = consensus._state
-        _cands_pre  = len(consensus._candidate_frames)
+        _state_pre = consensus._state
+        _cands_pre = len(consensus._candidate_frames)
 
         # Cerrar evento activo o candidatos pendientes al terminar el video
         final = consensus.flush()
@@ -1058,9 +1118,9 @@ class VideoProcessor:
             events.append(final)
 
         logger.debug(
-            "[_build_events_sliding] frames=%d  state_pre_flush=%s  "
+            "[_build_events_sliding] frames=%d  mog2_nodetect=%d  state_pre_flush=%s  "
             "candidates_pendientes=%d  flush_emitio=%s  eventos_emitidos=%d",
-            len(predictions), _state_pre, _cands_pre,
+            len(predictions), len(no_detect_map), _state_pre, _cands_pre,
             "si" if final is not None else "no", len(events),
         )
         return events
