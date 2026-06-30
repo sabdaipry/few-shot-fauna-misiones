@@ -1058,10 +1058,19 @@ class _DeepAnalysisWidget(QWidget):
         self._results.hide()
         self._btn.setEnabled(True)
 
+    def _clear_results(self) -> None:
+        if not _MPL_AVAILABLE:
+            return
+        self._dist_fig.clear()
+        self._dist_canvas.draw()
+        self._attn_fig.clear()
+        self._attn_canvas.draw()
+
     def _on_analyze(self) -> None:
         if self._event is None:
             return
         self._stop_worker()
+        self._clear_results()
         self._lbl_error.hide()
         self._results.hide()
         self._spinner_label.show()
