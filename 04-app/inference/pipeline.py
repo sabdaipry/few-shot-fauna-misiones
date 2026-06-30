@@ -238,6 +238,79 @@ class BioCLIPEmbedder:
         norms[norms == 0] = 1.0
         return embs_np / norms
 
+    def get_attention_map(self, pil_image: Image.Image) -> np.ndarray:
+        """
+        Calcula el mapa de atención via attention rollout sobre todos los bloques del ViT.
+
+        Registra hooks temporales en cada bloque de atención, ejecuta una pasada
+        forward, aplica attention rollout (producto acumulado de matrices de atención
+        con residual connection) y redimensiona la máscara al tamaño de la imagen.
+
+        Returns:
+            np.ndarray shape (H, W) float32, valores normalizados 0–1.
+        """
+        W, H = pil_image.size
+        resblocks = self._model.visual.transformer.resblocks
+        captured: list[torch.Tensor] = []
+        patched_mhas: list = []
+
+        def _make_patched_fwd(cls_fwd, mha_instance, storage):
+            def _patched(query, key, value, **kwargs):
+                kwargs.pop("need_weights", None)
+                kwargs.pop("average_attn_weights", None)
+                attn_out, weights = cls_fwd(
+                    mha_instance, query, key, value,
+                    need_weights=True,
+                    average_attn_weights=False,
+                    **kwargs,
+                )
+                if weights is not None:
+                    storage.append(weights.detach().cpu())
+                return attn_out, None
+            return _patched
+
+        for block in resblocks:
+            mha = block.attn
+            mha.forward = _make_patched_fwd(type(mha).forward, mha, captured)
+            patched_mhas.append(mha)
+
+        try:
+            img_t = self._preprocess(pil_image).unsqueeze(0)
+            with torch.no_grad():
+                self._model.encode_image(img_t)
+        finally:
+            for mha in patched_mhas:
+                try:
+                    del mha.forward
+                except AttributeError:
+                    pass
+
+        if not captured:
+            return np.zeros((H, W), dtype=np.float32)
+
+        # Attention rollout: A_hat_l = (0.5·A_l + 0.5·I) @ A_hat_{l-1}
+        seq_len = captured[0].shape[-1]
+        rollout = torch.eye(seq_len, dtype=torch.float32)
+        for attn in captured:
+            a = attn[0].float().mean(dim=0)          # promedio sobre cabezas → (seq, seq)
+            a = 0.5 * a + 0.5 * torch.eye(seq_len)
+            a = a / a.sum(dim=-1, keepdim=True)
+            rollout = a @ rollout
+
+        # Fila del token [CLS] (índice 0), descartando la posición del propio CLS
+        cls_attn  = rollout[0, 1:].numpy()
+        grid_size = int(round(len(cls_attn) ** 0.5))
+        mask_2d   = cls_attn.reshape(grid_size, grid_size)
+
+        v_min, v_max = mask_2d.min(), mask_2d.max()
+        if v_max > v_min:
+            mask_2d = (mask_2d - v_min) / (v_max - v_min)
+
+        mask_img = Image.fromarray((mask_2d * 255).astype(np.uint8)).resize(
+            (W, H), Image.Resampling.BILINEAR
+        )
+        return np.array(mask_img).astype(np.float32) / 255.0
+
 
 # ===========================================================================
 # SpeciesClassifier

@@ -461,6 +461,9 @@ class MainWindow(QMainWindow):
         # Catálogo de especies (cargado una sola vez)
         _species_catalog = _load_species_catalog()
 
+        # Embedder compartido: instanciado una vez, reutilizado en análisis en profundidad
+        self._embedder = None
+
         # Páginas de cada pestaña
         self._analisis_tab   = AnalisisTab()
         self._validacion_tab = ValidacionTab(species_catalog=_species_catalog)
@@ -476,6 +479,9 @@ class MainWindow(QMainWindow):
 
         # Propagar eventos completados de Análisis → Validación
         self._analisis_tab.events_ready.connect(self._on_events_ready)
+
+        # Embedder compartido: cuando el worker lo crea por primera vez, lo almacenamos
+        self._validacion_tab.embedder_available.connect(self._on_embedder_ready)
 
         # Persistencia de sesión: guardar al completar cada archivo y al validar
         self._analisis_tab.batch_changed.connect(self._save_session)
@@ -493,6 +499,18 @@ class MainWindow(QMainWindow):
 
         # Restaurar sesión previa si existe
         self._restore_session()
+
+    # ------------------------------------------------------------------
+
+    @property
+    def embedder(self):
+        """BioCLIPEmbedder compartido; None hasta que el primer análisis en profundidad lo cree."""
+        return self._embedder
+
+    def _on_embedder_ready(self, emb) -> None:
+        """Almacena el embedder creado en background para reutilizarlo en futuros análisis."""
+        self._embedder = emb
+        self._validacion_tab.set_embedder(emb)
 
     # ------------------------------------------------------------------
 

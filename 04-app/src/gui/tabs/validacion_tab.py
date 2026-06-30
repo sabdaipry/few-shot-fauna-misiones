@@ -37,9 +37,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -57,9 +60,11 @@ except ImportError:
 
 from ..styles import (
     ACCENT,
+    ERROR,
     NEUTRAL,
     SUCCESS,
     TEXT_PRIMARY,
+    WARNING,
     badge_qss,
     badge_qss_for,
     body_qss,
@@ -71,6 +76,8 @@ from ..styles import (
     title_qss,
     validation_badge_qss,
 )
+
+from ..workers.analysis_worker import DeepAnalysisWorker
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -845,6 +852,324 @@ class _ValidationCell(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Widget de análisis en profundidad (sub-componente del panel lateral)
+# ---------------------------------------------------------------------------
+
+def _deep_tab_qss() -> str:
+    return f"""
+        QTabWidget::pane {{
+            border: 1px solid rgba(153,225,122,50);
+            background: rgba(0,0,0,60);
+            border-radius: 6px;
+        }}
+        QTabBar::tab {{
+            background: #0d0d0d;
+            color: {TEXT_PRIMARY};
+            border: 1px solid rgba(153,225,122,50);
+            border-bottom: none;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 600;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            min-width: 100px;
+        }}
+        QTabBar::tab:selected {{
+            background: #1f2c1d;
+            border-color: rgba(153,225,122,100);
+        }}
+        QTabBar::tab:hover:!selected {{
+            background: #1a1a1a;
+        }}
+    """
+
+
+def _spinner_qss() -> str:
+    return f"""
+        QProgressBar {{
+            background: rgba(255,255,255,15);
+            border: none;
+            border-radius: 3px;
+            height: 4px;
+            text-align: center;
+        }}
+        QProgressBar::chunk {{
+            background: {ACCENT};
+            border-radius: 3px;
+        }}
+    """
+
+
+class _DeepAnalysisWidget(QWidget):
+    """
+    Botón 'Analizar en profundidad' + resultados expandibles en el panel lateral.
+
+    Los resultados se muestran en un QTabWidget con dos sub-pestañas:
+      - Distancias temporales: gráfico matplotlib (timestamps × distancias coseno)
+      - Mapa de atención: frame representativo con heatmap superpuesto
+
+    El embedder se inyecta desde fuera via set_embedder(). Si no hay embedder
+    disponible al hacer click, el worker lo crea en segundo plano y emite
+    embedder_created para que MainWindow lo almacene y reutilice.
+    """
+
+    embedder_created = Signal(object)   # propagado hacia arriba a MainWindow
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background: transparent;")
+
+        self._event    = None
+        self._filepath = None
+        self._embedder = None
+        self._worker: Optional[DeepAnalysisWorker] = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(6)
+
+        # Botón principal
+        self._btn = QPushButton("Analizar en profundidad")
+        self._btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn.setFixedHeight(30)
+        self._btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(153,225,122,18);
+                color: {TEXT_PRIMARY};
+                border: 1px solid rgba(153,225,122,70);
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QPushButton:hover {{ background: rgba(153,225,122,38); }}
+            QPushButton:disabled {{
+                background: rgba(74,82,72,20);
+                color: rgba(237,239,236,50);
+                border-color: rgba(74,82,72,50);
+            }}
+        """)
+        self._btn.clicked.connect(self._on_analyze)
+        root.addWidget(self._btn)
+
+        # Spinner (oculto por defecto)
+        self._spinner_label = QLabel("Analizando…")
+        self._spinner_label.setStyleSheet(
+            f"color: {ACCENT}; font-size: 10px; background: transparent;"
+        )
+        self._spinner_bar = QProgressBar()
+        self._spinner_bar.setRange(0, 0)
+        self._spinner_bar.setFixedHeight(4)
+        self._spinner_bar.setStyleSheet(_spinner_qss())
+        self._spinner_label.hide()
+        self._spinner_bar.hide()
+        root.addWidget(self._spinner_label)
+        root.addWidget(self._spinner_bar)
+
+        # Mensaje de error
+        self._lbl_error = QLabel()
+        self._lbl_error.setStyleSheet(
+            f"color: {ERROR}; font-size: 10px; background: transparent;"
+        )
+        self._lbl_error.setWordWrap(True)
+        self._lbl_error.hide()
+        root.addWidget(self._lbl_error)
+
+        # Contenedor de resultados (oculto hasta completar)
+        self._results = QWidget()
+        self._results.setStyleSheet("background: transparent;")
+        res_lay = QVBoxLayout(self._results)
+        res_lay.setContentsMargins(0, 0, 0, 0)
+        res_lay.setSpacing(4)
+        self._results.hide()
+
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(_deep_tab_qss())
+        res_lay.addWidget(self._tabs)
+
+        root.addWidget(self._results)
+
+        # Sub-pestaña "Distancias temporales"
+        self._dist_canvas_widget = QWidget()
+        self._dist_canvas_widget.setStyleSheet("background: transparent;")
+        self._dist_lay = QVBoxLayout(self._dist_canvas_widget)
+        self._dist_lay.setContentsMargins(4, 4, 4, 4)
+
+        # Sub-pestaña "Mapa de atención"
+        self._attn_canvas_widget = QWidget()
+        self._attn_canvas_widget.setStyleSheet("background: transparent;")
+        self._attn_lay = QVBoxLayout(self._attn_canvas_widget)
+        self._attn_lay.setContentsMargins(4, 4, 4, 4)
+
+        self._tabs.addTab(self._dist_canvas_widget, "Distancias temporales")
+        self._tabs.addTab(self._attn_canvas_widget, "Mapa de atención")
+
+        # Figuras matplotlib (creadas una sola vez, reutilizadas)
+        if _MPL_AVAILABLE:
+            self._dist_fig    = Figure(figsize=(3.6, 2.4), facecolor="#050505")
+            self._dist_canvas = FigureCanvasQTAgg(self._dist_fig)
+            self._dist_canvas.setStyleSheet("background: transparent;")
+            self._dist_lay.addWidget(self._dist_canvas)
+
+            self._attn_fig    = Figure(figsize=(3.6, 2.8), facecolor="#050505")
+            self._attn_canvas = FigureCanvasQTAgg(self._attn_fig)
+            self._attn_canvas.setStyleSheet("background: transparent;")
+            self._attn_lay.addWidget(self._attn_canvas)
+        else:
+            for lay, msg in (
+                (self._dist_lay, "matplotlib no disponible"),
+                (self._attn_lay, "matplotlib no disponible"),
+            ):
+                lbl = QLabel(msg)
+                lbl.setStyleSheet(body_qss(0.4))
+                lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                lay.addWidget(lbl)
+
+    # ------------------------------------------------------------------
+    # API pública
+
+    def set_embedder(self, embedder) -> None:
+        self._embedder = embedder
+
+    def set_context(self, event, filepath: Optional[Path]) -> None:
+        """Llama load_record() cada vez que el panel muestra un evento nuevo."""
+        self._event    = event
+        self._filepath = filepath
+        self._stop_worker()
+        self._hide_results()
+
+    # ------------------------------------------------------------------
+    # Internos
+
+    def _stop_worker(self) -> None:
+        if self._worker is not None:
+            self._worker.attention_ready.disconnect()
+            self._worker.distances_ready.disconnect()
+            self._worker.error_occurred.disconnect()
+            self._worker.embedder_created.disconnect()
+            if self._worker.isRunning():
+                self._worker.quit()
+                self._worker.wait(500)
+            self._worker = None
+
+    def _hide_results(self) -> None:
+        self._spinner_label.hide()
+        self._spinner_bar.hide()
+        self._lbl_error.hide()
+        self._results.hide()
+        self._btn.setEnabled(True)
+
+    def _on_analyze(self) -> None:
+        if self._event is None:
+            return
+        self._stop_worker()
+        self._lbl_error.hide()
+        self._results.hide()
+        self._spinner_label.show()
+        self._spinner_bar.show()
+        self._btn.setEnabled(False)
+
+        self._worker = DeepAnalysisWorker(
+            event    = self._event,
+            embedder = self._embedder,
+            filepath = self._filepath,
+        )
+        self._worker.attention_ready.connect(self._on_attention_ready)
+        self._worker.distances_ready.connect(self._on_distances_ready)
+        self._worker.error_occurred.connect(self._on_error)
+        self._worker.embedder_created.connect(self.embedder_created)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._worker.start()
+
+    def _on_worker_finished(self) -> None:
+        self._spinner_label.hide()
+        self._spinner_bar.hide()
+        self._btn.setEnabled(True)
+        self._results.show()
+
+    def _on_error(self, msg: str) -> None:
+        self._lbl_error.setText(f"Error: {msg}")
+        self._lbl_error.show()
+
+    # ------------------------------------------------------------------
+    # Render de distancias
+
+    def _on_distances_ready(self, timestamps: list, distances: list) -> None:
+        if not _MPL_AVAILABLE:
+            return
+
+        ax = self._dist_fig.add_subplot(111)
+        ax.cla()
+        ax.set_facecolor("#0a0a0a")
+        ax.tick_params(colors="#3a4238", labelsize=6)
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#1a241a")
+
+        if not distances:
+            ax.text(
+                0.5, 0.5,
+                "No disponible para imágenes individuales",
+                ha="center", va="center",
+                color="#4a5248", fontsize=8,
+                transform=ax.transAxes,
+            )
+            self._dist_fig.tight_layout(pad=0.5)
+            self._dist_canvas.draw()
+            return
+
+        import numpy as np_local
+        ts   = np_local.array(timestamps)
+        dist = np_local.array(distances)
+
+        # Colores por nivel
+        colors = []
+        for d in dist:
+            if d < 0.1866:
+                colors.append(SUCCESS)
+            elif d < 0.25:
+                colors.append(WARNING)
+            else:
+                colors.append(ERROR)
+
+        ax.scatter(ts, dist, c=colors, s=18, zorder=3, linewidths=0)
+        ax.plot(ts, dist, color=ACCENT, alpha=0.3, linewidth=0.8, zorder=2)
+
+        # Líneas de umbral
+        ax.axhline(0.1866, color=WARNING, linestyle="--", linewidth=0.8,
+                   alpha=0.8, label="Umbral confianza (0.1866)")
+        ax.axhline(0.25,   color=ERROR,   linestyle="--", linewidth=0.8,
+                   alpha=0.8, label="Umbral rechazo (0.25)")
+
+        ax.set_xlabel("Tiempo (s)", fontsize=6, color="#4a5248")
+        ax.set_ylabel("Distancia coseno", fontsize=6, color="#4a5248")
+        ax.set_title("Distancias por frame", fontsize=7, color=ACCENT, pad=3)
+        ax.legend(fontsize=5, framealpha=0.25, facecolor="#0a0a0a",
+                  edgecolor="#1f2c1d", labelcolor="#c0c8be", loc="upper right")
+
+        self._dist_fig.tight_layout(pad=0.5)
+        self._dist_canvas.draw()
+
+    # ------------------------------------------------------------------
+    # Render del mapa de atención
+
+    def _on_attention_ready(self, original: "_np_mpl.ndarray", attn_map: "_np_mpl.ndarray") -> None:
+        if not _MPL_AVAILABLE:
+            return
+
+        ax = self._attn_fig.add_subplot(111)
+        ax.cla()
+        ax.set_facecolor("#0a0a0a")
+        ax.axis("off")
+        ax.imshow(original)
+        ax.imshow(attn_map, cmap="jet", alpha=0.5, vmin=0.0, vmax=1.0)
+        ax.set_title(
+            "Zonas de mayor atención del modelo resaltadas en rojo",
+            fontsize=6.5, color=ACCENT, pad=3,
+        )
+        self._attn_fig.tight_layout(pad=0.3)
+        self._attn_canvas.draw()
+
+
+# ---------------------------------------------------------------------------
 # Panel lateral deslizable
 # ---------------------------------------------------------------------------
 
@@ -854,6 +1179,7 @@ class _SidePanel(QFrame):
     closed                = Signal()
     validation_saved      = Signal(int, str, str)   # row_idx, category, custom_species
     multi_species_changed = Signal(int, list)        # global_idx, species_list
+    embedder_available    = Signal(object)           # BioCLIPEmbedder creado en worker
 
     def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
@@ -1108,6 +1434,17 @@ class _SidePanel(QFrame):
         self._umap = _UMAPWidget()
         self._layout.addWidget(self._umap)
 
+        self._layout.addWidget(_sep())
+
+        # ── Análisis en profundidad ───────────────────────────────────────
+        lbl_deep = QLabel("ANÁLISIS EN PROFUNDIDAD")
+        lbl_deep.setStyleSheet(section_label_qss())
+        self._layout.addWidget(lbl_deep)
+
+        self._deep_analysis = _DeepAnalysisWidget()
+        self._deep_analysis.embedder_created.connect(self.embedder_available)
+        self._layout.addWidget(self._deep_analysis)
+
         self._layout.addStretch()
 
     def _top5_qss(self) -> str:
@@ -1136,6 +1473,10 @@ class _SidePanel(QFrame):
         """
 
     # ------------------------------------------------------------------
+
+    def set_embedder(self, embedder) -> None:
+        """Propaga el BioCLIPEmbedder al widget de análisis en profundidad."""
+        self._deep_analysis.set_embedder(embedder)
 
     def open_panel(self) -> None:
         if self._anim is None:
@@ -1287,6 +1628,9 @@ class _SidePanel(QFrame):
 
         # UMAP
         self._umap.set_event(top5)
+
+        # Widget de análisis en profundidad
+        self._deep_analysis.set_context(event, filepath)
 
     def _italic_font(self):
         from PySide6.QtGui import QFont
@@ -2000,9 +2344,12 @@ class ValidacionTab(QWidget):
             — devuelve copia de todos los registros para serializar en sesión.
         restore_records(records)
             — restaura registros desde una sesión guardada.
+        set_embedder(embedder)
+            — propaga el BioCLIPEmbedder al panel lateral para análisis en profundidad.
     """
 
-    validation_changed = Signal()  # emitida al guardar cualquier validación
+    validation_changed = Signal()   # emitida al guardar cualquier validación
+    embedder_available = Signal(object)  # re-emitida cuando el worker crea uno
 
     def __init__(self, species_catalog: list | None = None, parent=None):
         super().__init__(parent)
@@ -2053,6 +2400,14 @@ class ValidacionTab(QWidget):
         self._panel.closed.connect(self._on_panel_closed)
         self._panel.validation_saved.connect(self._on_panel_validation_saved)
         self._panel.multi_species_changed.connect(self._on_multi_species_changed)
+        self._panel.embedder_available.connect(self.embedder_available)
+
+    # ------------------------------------------------------------------
+    # API pública — embedder
+
+    def set_embedder(self, embedder) -> None:
+        """Propaga el BioCLIPEmbedder al panel lateral de análisis en profundidad."""
+        self._panel.set_embedder(embedder)
 
     # ------------------------------------------------------------------
     # API pública — sesión
