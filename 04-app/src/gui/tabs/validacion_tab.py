@@ -91,7 +91,7 @@ _CLIPS_DIR  = _APP_DIR / "SAREKO_clips"
 PAGE_SIZE    = 20
 PANEL_WIDTH  = 420
 
-_SPECIAL_OPTS = ["Desconocida", "Vacío / Ruido", "Ingreso manual..."]
+_SPECIAL_OPTS = ["Desconocida", "Vacío / Ruido", "Filtro MOG2", "Ingreso manual..."]
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +179,10 @@ def _get_confidence_level(event) -> str:
 
 
 def _get_decisor(event) -> str:
+    # Campo explícito tiene prioridad (ej: eventos MOG2 con decisor="Filtro MOG2")
+    decisor = getattr(event, "decisor", "")
+    if decisor:
+        return decisor
     if getattr(event, "ambiguous", False):
         return "Consenso"
     if getattr(event, "confidence_level", "") == "alta":
@@ -187,9 +191,10 @@ def _get_decisor(event) -> str:
 
 
 _METHOD_TEXTS = {
-    "BioCLIP":  "Clasificación directa — distancia coseno al centroide ≤ 0.1866",
-    "KNN":      "Árbitro KNN — distancia coseno al centroide > 0.1866, voto ponderado por 5 vecinos",
-    "Consenso": "Evento ambiguo — quórum no alcanzado en ventana de 10 frames",
+    "BioCLIP":      "Clasificación directa — distancia coseno al centroide ≤ 0.1866",
+    "KNN":          "Árbitro KNN — distancia coseno al centroide > 0.1866, voto ponderado por 5 vecinos",
+    "Consenso":     "Evento ambiguo — quórum no alcanzado en ventana de 10 frames",
+    "Filtro MOG2":  "Frame descartado por el filtro de movimiento — área de movimiento < umbral configurado",
 }
 
 

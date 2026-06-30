@@ -22,6 +22,9 @@ WARNING = "#e6b84a"
 ERROR   = "#e05c5c"
 NEUTRAL = "#4a5248"
 
+# Sólido equivalente al fondo de cards (usado en figuras matplotlib y diálogos)
+CARD_BG = "#0d0d0d"
+
 # Fondos con alpha (valores 0-255 para Qt QSS)
 _NAVBAR_ALPHA  = 217
 _CARD_ALPHA    = 178
@@ -48,6 +51,9 @@ BADGE_COLORS: dict[str, tuple[str, str]] = {
     # Estados auxiliares
     "en espera":           ("#4a5248", "#edefec"),
     "sin corrida activa":  ("#4a5248", "#edefec"),
+    # Filtro de movimiento MOG2
+    "mog2":                ("#4a5248", "#edefec"),
+    "rechazado":           ("#4a5248", "#edefec"),
 }
 
 VALIDATION_COLORS: dict[str, tuple[str, str]] = {

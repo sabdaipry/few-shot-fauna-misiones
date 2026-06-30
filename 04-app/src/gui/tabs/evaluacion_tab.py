@@ -197,6 +197,9 @@ def _expected_species(record: dict) -> str:
 
 
 def _get_decisor(event) -> str:
+    decisor = getattr(event, "decisor", "")
+    if decisor:
+        return decisor
     if getattr(event, "ambiguous", False):
         return "Consenso"
     if getattr(event, "confidence_level", "") == "alta":
@@ -684,10 +687,10 @@ class _LatencyCard(QFrame):
         layout.addWidget(self._empty_lbl)
 
         # ── Tabla ─────────────────────────────────────────────────────────
-        self._table = QTableWidget(0, 8)
+        self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "TIPO", "DURACIÓN", "MODO",
-            "CONSENSO", "FRAMES", "T. PROCESO", "FACTOR",
+            "CONSENSO", "MOG2", "FRAMES", "T. PROCESO", "FACTOR",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -698,14 +701,16 @@ class _LatencyCard(QFrame):
         hh.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(8, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 200)
         self._table.setColumnWidth(1, 70)
         self._table.setColumnWidth(2, 80)
         self._table.setColumnWidth(3, 90)
         self._table.setColumnWidth(4, 90)
-        self._table.setColumnWidth(5, 80)
-        self._table.setColumnWidth(6, 100)
-        self._table.setColumnWidth(7, 70)
+        self._table.setColumnWidth(5, 56)
+        self._table.setColumnWidth(6, 80)
+        self._table.setColumnWidth(7, 100)
+        self._table.setColumnWidth(8, 70)
         self._table.verticalHeader().setVisible(False)
         self._table.setShowGrid(False)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -771,24 +776,30 @@ class _LatencyCard(QFrame):
             it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 4, it4)
 
-            # Col 5 — Frames analizados
-            it5 = QTableWidgetItem(str(frames) if frames is not None else "—")
-            it5.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(i, 5, it5)
+            # Col 5 — MOG2
+            motion_filter = rec.get("motion_filter", False)
+            it5mog = QTableWidgetItem("Sí" if motion_filter else "No")
+            it5mog.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 5, it5mog)
 
-            # Col 6 — Tiempo de procesamiento
-            it6 = QTableWidgetItem(_fmt_time(processing_sec))
+            # Col 6 — Frames analizados
+            it6 = QTableWidgetItem(str(frames) if frames is not None else "—")
             it6.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 6, it6)
 
-            # Col 7 — Factor
+            # Col 7 — Tiempo de procesamiento
+            it7 = QTableWidgetItem(_fmt_time(processing_sec))
+            it7.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 7, it7)
+
+            # Col 8 — Factor
             if duration_sec is not None and duration_sec > 0:
                 factor_str = f"{processing_sec / duration_sec:.2f}×"
             else:
                 factor_str = "—"
-            it7 = QTableWidgetItem(factor_str)
-            it7.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(i, 7, it7)
+            it8 = QTableWidgetItem(factor_str)
+            it8.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._table.setItem(i, 8, it8)
 
     # ------------------------------------------------------------------
     # Exportación
@@ -805,12 +816,14 @@ class _LatencyCard(QFrame):
                 if duration_sec is not None and duration_sec > 0 else "—"
             )
             consensus_mode = rec.get("consensus_mode", "static")
+            motion_filter  = rec.get("motion_filter", False)
             out.append({
                 "archivo":              rec.get("filename", "—"),
                 "tipo":                 rec.get("type", "—"),
                 "duracion":             dur_str,
                 "modo":                 rec.get("mode", "—"),
                 "consenso":             "Deslizante" if consensus_mode == "sliding" else "Estático",
+                "mog2":                 "Sí" if motion_filter else "No",
                 "frames_analizados":    str(frames) if frames is not None else "—",
                 "tiempo_procesamiento": _fmt_time(processing_sec),
                 "factor":               factor_str,

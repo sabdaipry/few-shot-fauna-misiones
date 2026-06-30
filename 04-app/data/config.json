@@ -7,5 +7,6 @@
   "default_M": 6,
   "sliding_close_quorum_P": 3,
   "sliding_close_threshold": 0.1866,
+  "motion_filter_min_area": 500,
   "debug_mode": false
 }

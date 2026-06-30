@@ -7,14 +7,17 @@ Clases:
     CatalogManager          — centroides, gallery KNN, nombres comunes
     BioCLIPEmbedder         — extracción de embeddings via open_clip
     SpeciesClassifier       — clasificación por centroide + árbitro KNN
+    MotionFilter            — pre-filtro de movimiento basado en MOG2
     SlidingWindowConsensus  — consenso deslizante frame a frame
     VideoProcessor          — procesamiento de video con consenso temporal
 """
 
+import concurrent.futures
 import json
 import logging
 import math
 import pickle
+import queue
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,6 +61,54 @@ REJECTION_THRESHOLD    = float(_CONFIG.get("rejection_threshold",    0.25))
 KNN_K                  = int(  _CONFIG.get("knn_k",                  5))
 _SLIDING_P_DEFAULT     = int(  _CONFIG.get("sliding_close_quorum_P", 3))
 _SLIDING_THRESHOLD     = float(_CONFIG.get("sliding_close_threshold", CONFIDENCE_THRESHOLD))
+_MOTION_MIN_AREA       = int(  _CONFIG.get("motion_filter_min_area",  500))
+
+
+# ===========================================================================
+# MotionFilter
+# ===========================================================================
+
+class MotionFilter:
+    """
+    Pre-filtro de movimiento basado en sustracción de fondo MOG2.
+    Descarta frames sin movimiento relevante antes de enviarlos a BioCLIP.
+    Parámetros configurables: min_contour_area, history, varThreshold.
+    """
+
+    def __init__(
+        self,
+        min_contour_area: int = 500,
+        history:          int = 500,
+        var_threshold:    int = 16,
+    ) -> None:
+        self._subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=history, varThreshold=var_threshold, detectShadows=False
+        )
+        self._min_area   = min_contour_area
+        self._warmup     = history   # frames totales hasta que el modelo sea confiable
+        self._fed        = 0
+        self._last_area  = 0.0
+
+    def update(self, frame: np.ndarray) -> bool:
+        """
+        Alimenta el subtractor con el frame y devuelve si tiene movimiento relevante.
+
+        Durante el calentamiento (primeros `history` frames), devuelve True
+        incondicionalmente y _last_area queda como inf para indicar que no fue filtrado.
+        """
+        mask = self._subtractor.apply(frame)
+        self._fed += 1
+        if self._fed <= self._warmup:
+            self._last_area = float("inf")
+            return True
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self._last_area = float(sum(cv2.contourArea(c) for c in contours))
+        return self._last_area >= self._min_area
+
+    @property
+    def last_area(self) -> float:
+        """Área total de contornos del último frame procesado."""
+        return self._last_area
 
 
 # ===========================================================================
@@ -678,10 +729,12 @@ class BiologicalEvent:
     confidence_level:         str    # del frame representativo ("alta" | "baja")
     ambiguous:                bool
     top5_candidates:          list[dict]  = field(default_factory=list)
-    consensus_mode:           str         = "static"   # "static" | "sliding"
+    consensus_mode:           str         = "static"   # "static" | "sliding" | "mog2"
     frame_distances:          list[float] = field(default_factory=list)
     frame_timestamps:         list[float] = field(default_factory=list)
     rejected_frames:          int         = 0
+    motion_filtered_frames:   int         = 0
+    decisor:                  str         = ""         # "BioCLIP" | "KNN" | "Filtro MOG2" | ""
 
 
 class VideoProcessor:
@@ -700,24 +753,26 @@ class VideoProcessor:
 
     def __init__(
         self,
-        embedder:       BioCLIPEmbedder,
-        classifier:     SpeciesClassifier,
-        N:              int  = 30,
-        K:              int  = 10,
-        M:              int  = 6,
-        P:              int  = _SLIDING_P_DEFAULT,
-        batch_size:     int  = 8,
-        consensus_mode: str  = "static",
+        embedder:           BioCLIPEmbedder,
+        classifier:         SpeciesClassifier,
+        N:                  int  = 30,
+        K:                  int  = 10,
+        M:                  int  = 6,
+        P:                  int  = _SLIDING_P_DEFAULT,
+        batch_size:         int  = 8,
+        consensus_mode:     str  = "static",
+        use_motion_filter:  bool = False,
     ) -> None:
-        self._embedder      = embedder
-        self._classifier    = classifier
-        self._catalog       = classifier._catalog
-        self.N              = N
-        self.K              = K
-        self.M              = M
-        self.P              = P
-        self.batch_size     = batch_size
-        self.consensus_mode = consensus_mode
+        self._embedder          = embedder
+        self._classifier        = classifier
+        self._catalog           = classifier._catalog
+        self.N                  = N
+        self.K                  = K
+        self.M                  = M
+        self.P                  = P
+        self.batch_size         = batch_size
+        self.consensus_mode     = consensus_mode
+        self.use_motion_filter  = use_motion_filter
 
     def process(
         self,
@@ -727,11 +782,18 @@ class VideoProcessor:
         """
         Procesa el video y devuelve una lista de eventos biológicos.
 
+        Usa un ThreadPoolExecutor (1 worker) para precargar el siguiente batch
+        de frames mientras BioCLIP procesa el actual, eliminando el tiempo muerto
+        entre batches.
+
+        Si use_motion_filter=True, aplica MOG2 antes de enviar frames a BioCLIP.
+        Los frames descartados por MOG2 se agrupan en eventos con confidence_level="mog2".
+        Si el video tiene menos de 30 frames submuestreados, MOG2 se desactiva
+        automáticamente para ese video.
+
         Args:
             video_path:        Ruta al archivo de video.
             progress_callback: callable(frames_procesados, total_estimado).
-                               Firma compatible con GUI:
-                               lambda done, tot: signal.emit(int(done / tot * 100))
 
         Returns:
             Lista de BiologicalEvent ordenada cronológicamente.
@@ -740,56 +802,99 @@ class VideoProcessor:
         if not cap.isOpened():
             raise RuntimeError(f"No se pudo abrir el video: {video_path}")
 
-        fps           = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_frames  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        est_sampled   = max(1, math.ceil(total_frames / self.N))
+        fps          = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        est_sampled  = max(1, math.ceil(total_frames / self.N))
+        cap.release()
+
+        # Auto-desactivar MOG2 en videos con muy pocos frames submuestreados
+        effective_motion_filter = self.use_motion_filter
+        if self.use_motion_filter and est_sampled < 30:
+            logger.warning(
+                "MOG2 desactivado: video con menos de 30 frames submuestreados (%d)",
+                est_sampled,
+            )
+            effective_motion_filter = False
 
         frame_predictions:    list[dict]  = []
         rejected_timestamps:  list[float] = []
-        batch_imgs:           list[Image.Image] = []
-        batch_meta:           list[dict]        = []
+        # Lista de frames descartados por MOG2: {frame_idx, timestamp, area}
+        motion_filtered_info: list[dict]  = []
         processed = 0
 
-        def _flush() -> None:
-            nonlocal processed
-            if not batch_imgs:
-                return
-            embs = self._embedder.embed_batch(batch_imgs)
-            for i, meta in enumerate(batch_meta):
-                result = self._classifier.classify(embs[i])
-                if result.confidence_level == "rechazado":
-                    rejected_timestamps.append(meta["timestamp"])
-                else:
-                    frame_predictions.append({
-                        "frame_idx": meta["frame_idx"],
-                        "timestamp": meta["timestamp"],
-                        "result":    result,
-                    })
-                processed += 1
-                if progress_callback:
-                    progress_callback(processed, est_sampled)
-            batch_imgs.clear()
-            batch_meta.clear()
+        batch_queue: queue.Queue = queue.Queue(maxsize=2)
+        _DONE = object()
 
-        frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        def _producer() -> None:
+            """Extrae, convierte a RGB y agrupa frames en batches; corre en thread separado."""
+            local_cap = cv2.VideoCapture(str(video_path))
+            local_fps = local_cap.get(cv2.CAP_PROP_FPS) or 30.0
+            mf = MotionFilter(min_contour_area=_MOTION_MIN_AREA) if effective_motion_filter else None
 
-            if frame_idx % self.N == 0:
-                timestamp = frame_idx / fps
-                pil_img   = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                batch_imgs.append(pil_img)
-                batch_meta.append({"frame_idx": frame_idx, "timestamp": timestamp})
+            imgs: list[Image.Image] = []
+            meta: list[dict]        = []
+            fi = 0
 
-                if len(batch_imgs) >= self.batch_size:
-                    _flush()
+            try:
+                while True:
+                    ret, frame = local_cap.read()
+                    if not ret:
+                        break
 
-            frame_idx += 1
+                    is_sampled = (fi % self.N == 0)
 
-        _flush()
-        cap.release()
+                    # Alimentar MOG2 con cada frame (mejora el modelo de fondo);
+                    # usar el resultado solo en frames submuestreados
+                    if mf is not None:
+                        has_motion = mf.update(frame)
+                        if is_sampled and not has_motion:
+                            motion_filtered_info.append({
+                                "frame_idx": fi,
+                                "timestamp": fi / local_fps,
+                                "area":      mf.last_area,
+                            })
+                            fi += 1
+                            continue
+
+                    if is_sampled:
+                        imgs.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+                        meta.append({"frame_idx": fi, "timestamp": fi / local_fps})
+                        if len(imgs) >= self.batch_size:
+                            batch_queue.put((list(imgs), list(meta)))
+                            imgs.clear()
+                            meta.clear()
+
+                    fi += 1
+
+            finally:
+                if imgs:
+                    batch_queue.put((imgs, meta))
+                local_cap.release()
+                batch_queue.put(_DONE)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(_producer)
+
+            while True:
+                item = batch_queue.get()
+                if item is _DONE:
+                    break
+                batch_imgs, batch_meta = item
+                embs = self._embedder.embed_batch(batch_imgs)
+                for i, m in enumerate(batch_meta):
+                    result = self._classifier.classify(embs[i])
+                    if result.confidence_level == "rechazado":
+                        rejected_timestamps.append(m["timestamp"])
+                    else:
+                        frame_predictions.append({
+                            "frame_idx": m["frame_idx"],
+                            "timestamp": m["timestamp"],
+                            "result":    result,
+                        })
+                    processed += 1
+                    if progress_callback:
+                        progress_callback(processed, est_sampled)
+
         if self.consensus_mode == "sliding":
             events = self._build_events_sliding(frame_predictions)
         else:
@@ -800,7 +905,64 @@ class VideoProcessor:
                 1 for ts in rejected_timestamps
                 if event.start_time <= ts <= event.end_time
             )
+            event.motion_filtered_frames = sum(
+                1 for info in motion_filtered_info
+                if event.start_time <= info["timestamp"] <= event.end_time
+            )
 
+        mog2_events = self._build_mog2_events(motion_filtered_info)
+        all_events  = sorted(events + mog2_events, key=lambda e: e.start_time)
+        return all_events
+
+    # ------------------------------------------------------------------
+    # Construcción de eventos MOG2
+    # ------------------------------------------------------------------
+
+    def _build_mog2_events(self, filtered_info: list[dict]) -> list[BiologicalEvent]:
+        """
+        Agrupa frames descartados por MOG2 en BiologicalEvent con confidence_level='mog2'.
+
+        Dos frames consecutivos en el espacio submuestreado (distancia de frame_idx
+        exactamente igual a N) forman parte del mismo grupo.
+        El frame representativo es el de mayor área de movimiento detectada.
+        """
+        if not filtered_info:
+            return []
+
+        frames = sorted(filtered_info, key=lambda x: x["frame_idx"])
+        groups: list[list[dict]] = []
+        current: list[dict] = [frames[0]]
+
+        for prev, curr in zip(frames, frames[1:]):
+            if curr["frame_idx"] - prev["frame_idx"] == self.N:
+                current.append(curr)
+            else:
+                groups.append(current)
+                current = [curr]
+        groups.append(current)
+
+        events: list[BiologicalEvent] = []
+        for grp in groups:
+            rep = max(grp, key=lambda x: x["area"])
+            events.append(BiologicalEvent(
+                species                  = "",
+                nombre_comun_es_ar       = "",
+                nombre_comun_en          = "",
+                start_time               = grp[0]["timestamp"],
+                end_time                 = grp[-1]["timestamp"],
+                representative_frame_idx = rep["frame_idx"],
+                representative_timestamp = rep["timestamp"],
+                cosine_distance          = 0.0,
+                confidence_level         = "mog2",
+                ambiguous                = False,
+                top5_candidates          = [],
+                consensus_mode           = "mog2",
+                frame_distances          = [],
+                frame_timestamps         = [f["timestamp"] for f in grp],
+                rejected_frames          = 0,
+                motion_filtered_frames   = len(grp),
+                decisor                  = "Filtro MOG2",
+            ))
         return events
 
     # ------------------------------------------------------------------

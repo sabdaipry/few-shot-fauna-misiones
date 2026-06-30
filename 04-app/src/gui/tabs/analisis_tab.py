@@ -14,6 +14,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -362,6 +363,46 @@ class _CargaCard(QFrame):
 
         layout.addWidget(_sep())
 
+        # Filtro de movimiento MOG2
+        lbl_mog2 = QLabel("FILTRO DE MOVIMIENTO")
+        lbl_mog2.setStyleSheet(section_label_qss())
+        layout.addWidget(lbl_mog2)
+
+        self._chk_mog2 = QCheckBox("Filtro de movimiento (MOG2)")
+        self._chk_mog2.setStyleSheet(f"""
+            QCheckBox {{
+                color: {TEXT_PRIMARY};
+                font-size: 12px;
+                background: transparent;
+                spacing: 8px;
+            }}
+            QCheckBox::indicator {{
+                width: 15px;
+                height: 15px;
+                border: 1px solid rgba(153,225,122,100);
+                border-radius: 3px;
+                background: rgba(0,0,0,80);
+            }}
+            QCheckBox::indicator:checked {{
+                background: {ACCENT};
+                border-color: {ACCENT};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {ACCENT};
+            }}
+        """)
+        layout.addWidget(self._chk_mog2)
+
+        lbl_mog2_desc = QLabel(
+            "Descarta frames sin movimiento antes de procesarlos con BioCLIP. "
+            "Reduce el tiempo de procesamiento en videos con largos períodos sin fauna."
+        )
+        lbl_mog2_desc.setStyleSheet(body_qss(0.55))
+        lbl_mog2_desc.setWordWrap(True)
+        layout.addWidget(lbl_mog2_desc)
+
+        layout.addWidget(_sep())
+
         # Botón Procesar
         self._btn_procesar = QPushButton("Procesar")
         self._btn_procesar.setEnabled(False)
@@ -484,6 +525,10 @@ class _CargaCard(QFrame):
         return "sliding" if self._consensus_combo.currentIndex() == 1 else "static"
 
     @property
+    def use_motion_filter(self) -> bool:
+        return self._chk_mog2.isChecked()
+
+    @property
     def btn_procesar(self) -> QPushButton:
         return self._btn_procesar
 
@@ -502,6 +547,7 @@ class _CargaCard(QFrame):
         # Los botones de selección permanecen habilitados durante el procesamiento
         self._combo.setEnabled(not active)
         self._consensus_combo.setEnabled(not active)
+        self._chk_mog2.setEnabled(not active)
         if active:
             self._btn_procesar.setText("Procesando…")
             self._btn_procesar.setEnabled(False)
@@ -1339,6 +1385,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode: str = "Estándar"
         self._current_consensus_mode: str = "static"
+        self._current_use_motion_filter: bool = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -1383,6 +1430,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._current_consensus_mode = self._carga.consensus_mode
+        self._current_use_motion_filter = self._carga.use_motion_filter
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
@@ -1397,6 +1445,7 @@ class AnalisisTab(QWidget):
         self._worker = ProcessingWorker(
             files, N=N, K=K, M=M, batch_size=8,
             consensus_mode=self._current_consensus_mode,
+            use_motion_filter=self._current_use_motion_filter,
         )
         self._worker.progress_updated.connect(self._seg.update_progress)
         self._worker.stage_updated.connect(self._seg.update_stage)
@@ -1513,11 +1562,12 @@ class AnalisisTab(QWidget):
                 "frames_processed": meta.get("frames_processed"),
             })
         return {
-            "files":          files,
-            "species_seen":   list(self._species_seen),
-            "total_frames":   self._total_frames,
-            "mode":           self._current_mode,
-            "consensus_mode": self._current_consensus_mode,
+            "files":              files,
+            "species_seen":       list(self._species_seen),
+            "total_frames":       self._total_frames,
+            "mode":               self._current_mode,
+            "consensus_mode":     self._current_consensus_mode,
+            "use_motion_filter":  self._current_use_motion_filter,
         }
 
     def restore_batch(self, summary: dict, records: list[dict]) -> None:
@@ -1578,6 +1628,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode = "Estándar"
         self._current_consensus_mode = "static"
+        self._current_use_motion_filter = False
         self._hero.reset()
         self._seg.reset()
         self._batch.populate([])
@@ -1594,6 +1645,7 @@ class AnalisisTab(QWidget):
 
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._current_consensus_mode = self._carga.consensus_mode
+        self._current_use_motion_filter = self._carga.use_motion_filter
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
