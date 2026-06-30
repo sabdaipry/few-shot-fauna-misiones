@@ -219,7 +219,8 @@ class SessionManager:
         # Acumular latency records por cada archivo completado de esta corrida
         mode               = batch_summary.get("mode", "—")
         consensus_mode     = batch_summary.get("consensus_mode", "static")
-        use_motion_filter  = batch_summary.get("use_motion_filter", False)
+        # Modo de filtro a nivel de sesión (fallback si el archivo no tiene el suyo)
+        session_mf_mode    = batch_summary.get("motion_filter_mode", "none")
         for f in files:
             if f.get("state") != "completado":
                 continue
@@ -227,15 +228,17 @@ class SessionManager:
             if proc_sec is None:
                 continue
             dur_sec = f.get("duration_sec")
+            # Modo efectivo por archivo; imágenes no tienen MOG2, usan "none"
+            file_mf_mode = f.get("motion_filter_mode", session_mf_mode if dur_sec is not None else "none")
             history["latency_records"].append({
-                "filename":         f.get("name", ""),
-                "type":             "video" if dur_sec is not None else "imagen",
-                "duration_sec":     dur_sec,
-                "mode":             mode,
-                "consensus_mode":   consensus_mode,
-                "motion_filter":    use_motion_filter,
-                "frames_processed": f.get("frames_processed"),
-                "processing_sec":   float(proc_sec),
+                "filename":           f.get("name", ""),
+                "type":               "video" if dur_sec is not None else "imagen",
+                "duration_sec":       dur_sec,
+                "mode":               mode,
+                "consensus_mode":     consensus_mode,
+                "motion_filter_mode": file_mf_mode,
+                "frames_processed":   f.get("frames_processed"),
+                "processing_sec":     float(proc_sec),
             })
 
         cls.save_history(history)

@@ -7,6 +7,8 @@
   "default_M": 6,
   "sliding_close_quorum_P": 3,
   "sliding_close_threshold": 0.1866,
-  "motion_filter_min_area": 500,
+  "motion_filter_high_contrast_area": 500,
+  "motion_filter_low_contrast_area": 100,
+  "motion_filter_adaptive_luminance_threshold": 60,
   "debug_mode": false
 }

@@ -14,7 +14,6 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -72,6 +71,18 @@ _CONSENSUS_MODES = [
     ("Ventana deslizante",
      "Detecta inicio y fin del evento frame a frame. "
      "Más preciso para fauna intermitente."),
+]
+
+# Formato: (etiqueta UI, clave interna, descripción)
+_MOTION_FILTER_MODES = [
+    ("Ninguno",                   "none",
+     "Sin pre-filtrado. Todos los frames se envían a BioCLIP."),
+    ("Alto contraste (diurno)",   "high_contrast",
+     "Para videos con buena iluminación. Descarta frames sin movimiento evidente."),
+    ("Bajo contraste (nocturno)", "low_contrast",
+     "Para videos con iluminación infrarroja. Más sensible a movimiento sutil."),
+    ("Adaptativo",                "adaptive",
+     "Analiza la iluminación del video y elige automáticamente entre alto o bajo contraste."),
 ]
 
 _STAGES = [
@@ -368,38 +379,33 @@ class _CargaCard(QFrame):
         lbl_mog2.setStyleSheet(section_label_qss())
         layout.addWidget(lbl_mog2)
 
-        self._chk_mog2 = QCheckBox("Filtro de movimiento (MOG2)")
-        self._chk_mog2.setStyleSheet(f"""
-            QCheckBox {{
+        self._combo_mog2 = QComboBox()
+        self._combo_mog2.setStyleSheet(f"""
+            QComboBox {{
+                background: rgba(0,0,0,120);
                 color: {TEXT_PRIMARY};
-                font-size: 12px;
-                background: transparent;
-                spacing: 8px;
+                border: 1px solid rgba(153,225,122,80);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 13px;
             }}
-            QCheckBox::indicator {{
-                width: 15px;
-                height: 15px;
-                border: 1px solid rgba(153,225,122,100);
-                border-radius: 3px;
-                background: rgba(0,0,0,80);
-            }}
-            QCheckBox::indicator:checked {{
-                background: {ACCENT};
-                border-color: {ACCENT};
-            }}
-            QCheckBox::indicator:hover {{
-                border-color: {ACCENT};
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox QAbstractItemView {{
+                background: #1a1a1a;
+                color: {TEXT_PRIMARY};
+                selection-background-color: #1f2c1d;
+                border: 1px solid rgba(153,225,122,80);
             }}
         """)
-        layout.addWidget(self._chk_mog2)
+        for name, _, _ in _MOTION_FILTER_MODES:
+            self._combo_mog2.addItem(name)
+        self._combo_mog2.setCurrentIndex(3)  # Adaptativo por defecto
+        layout.addWidget(self._combo_mog2)
 
-        lbl_mog2_desc = QLabel(
-            "Descarta frames sin movimiento antes de procesarlos con BioCLIP. "
-            "Reduce el tiempo de procesamiento en videos con largos períodos sin fauna."
-        )
-        lbl_mog2_desc.setStyleSheet(body_qss(0.55))
-        lbl_mog2_desc.setWordWrap(True)
-        layout.addWidget(lbl_mog2_desc)
+        self._lbl_mog2_desc = QLabel(_MOTION_FILTER_MODES[3][2])
+        self._lbl_mog2_desc.setStyleSheet(body_qss(0.55))
+        self._lbl_mog2_desc.setWordWrap(True)
+        layout.addWidget(self._lbl_mog2_desc)
 
         layout.addWidget(_sep())
 
@@ -423,6 +429,7 @@ class _CargaCard(QFrame):
         self._btn_folder.clicked.connect(self._pick_folder)
         self._combo.currentIndexChanged.connect(self._on_mode_changed)
         self._consensus_combo.currentIndexChanged.connect(self._on_consensus_changed)
+        self._combo_mog2.currentIndexChanged.connect(self._on_mog2_changed)
 
     # ------------------------------------------------------------------
 
@@ -501,6 +508,9 @@ class _CargaCard(QFrame):
     def _on_consensus_changed(self, idx: int) -> None:
         self._lbl_consensus_desc.setText(_CONSENSUS_MODES[idx][1])
 
+    def _on_mog2_changed(self, idx: int) -> None:
+        self._lbl_mog2_desc.setText(_MOTION_FILTER_MODES[idx][2])
+
     # ------------------------------------------------------------------
     # API pública
 
@@ -525,8 +535,8 @@ class _CargaCard(QFrame):
         return "sliding" if self._consensus_combo.currentIndex() == 1 else "static"
 
     @property
-    def use_motion_filter(self) -> bool:
-        return self._chk_mog2.isChecked()
+    def motion_filter_mode(self) -> str:
+        return _MOTION_FILTER_MODES[self._combo_mog2.currentIndex()][1]
 
     @property
     def btn_procesar(self) -> QPushButton:
@@ -547,7 +557,7 @@ class _CargaCard(QFrame):
         # Los botones de selección permanecen habilitados durante el procesamiento
         self._combo.setEnabled(not active)
         self._consensus_combo.setEnabled(not active)
-        self._chk_mog2.setEnabled(not active)
+        self._combo_mog2.setEnabled(not active)
         if active:
             self._btn_procesar.setText("Procesando…")
             self._btn_procesar.setEnabled(False)
@@ -1385,7 +1395,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode: str = "Estándar"
         self._current_consensus_mode: str = "static"
-        self._current_use_motion_filter: bool = False
+        self._current_motion_filter_mode: str = "adaptive"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
@@ -1430,7 +1440,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._current_consensus_mode = self._carga.consensus_mode
-        self._current_use_motion_filter = self._carga.use_motion_filter
+        self._current_motion_filter_mode = self._carga.motion_filter_mode
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)
@@ -1445,7 +1455,7 @@ class AnalisisTab(QWidget):
         self._worker = ProcessingWorker(
             files, N=N, K=K, M=M, batch_size=8,
             consensus_mode=self._current_consensus_mode,
-            use_motion_filter=self._current_use_motion_filter,
+            motion_filter_mode=self._current_motion_filter_mode,
         )
         self._worker.progress_updated.connect(self._seg.update_progress)
         self._worker.stage_updated.connect(self._seg.update_stage)
@@ -1557,17 +1567,18 @@ class AnalisisTab(QWidget):
                 "pct":              row["pct"],
                 "error_msg":        row.get("error_msg", ""),
                 "error_stage":      row.get("error_stage", ""),
-                "duration_sec":     meta.get("duration_sec"),
-                "processing_sec":   meta.get("processing_sec"),
-                "frames_processed": meta.get("frames_processed"),
+                "duration_sec":       meta.get("duration_sec"),
+                "processing_sec":     meta.get("processing_sec"),
+                "frames_processed":   meta.get("frames_processed"),
+                "motion_filter_mode": meta.get("motion_filter_mode", "none"),
             })
         return {
             "files":              files,
             "species_seen":       list(self._species_seen),
             "total_frames":       self._total_frames,
-            "mode":               self._current_mode,
-            "consensus_mode":     self._current_consensus_mode,
-            "use_motion_filter":  self._current_use_motion_filter,
+            "mode":                self._current_mode,
+            "consensus_mode":      self._current_consensus_mode,
+            "motion_filter_mode":  self._current_motion_filter_mode,
         }
 
     def restore_batch(self, summary: dict, records: list[dict]) -> None:
@@ -1582,6 +1593,11 @@ class AnalisisTab(QWidget):
 
         self._species_seen = set(summary.get("species_seen", []))
         self._total_frames = summary.get("total_frames", 0)
+        # Restaurar modo de filtro (compatibilidad con sesiones guardadas con el campo legacy bool)
+        _mf_mode = summary.get("motion_filter_mode")
+        if _mf_mode is None:
+            _mf_mode = "high_contrast" if summary.get("use_motion_filter", False) else "none"
+        self._current_motion_filter_mode = _mf_mode
 
         file_paths = [
             Path(fd["path"]) if fd.get("path") else Path(fd["name"])
@@ -1628,7 +1644,7 @@ class AnalisisTab(QWidget):
         self._total_frames = 0
         self._current_mode = "Estándar"
         self._current_consensus_mode = "static"
-        self._current_use_motion_filter = False
+        self._current_motion_filter_mode = "adaptive"
         self._hero.reset()
         self._seg.reset()
         self._batch.populate([])
@@ -1645,7 +1661,7 @@ class AnalisisTab(QWidget):
 
         self._current_mode = _MODES[self._carga._combo.currentIndex()][0]
         self._current_consensus_mode = self._carga.consensus_mode
-        self._current_use_motion_filter = self._carga.use_motion_filter
+        self._current_motion_filter_mode = self._carga.motion_filter_mode
         self._seg.reset()
         self._hero.set_active("procesando")
         self._carga.set_processing(True)

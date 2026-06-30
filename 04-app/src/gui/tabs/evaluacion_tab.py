@@ -70,6 +70,18 @@ from ..styles import (
 
 _ORANGE = "#e07840"
 
+_MOTION_MODE_DISPLAY: dict[str, str] = {
+    "none":                       "Ninguno",
+    "high_contrast":              "Alto contraste",
+    "low_contrast":               "Bajo contraste",
+    "adaptive_high_contrast":     "Adaptativo (→ Alto)",
+    "adaptive_low_contrast":      "Adaptativo (→ Bajo)",
+}
+
+
+def _fmt_motion_mode(mode: str) -> str:
+    return _MOTION_MODE_DISPLAY.get(mode, mode)
+
 _CATEGORY_KEYS = ["Correcta", "Top 5", "Conocida", "Desconocida", "Vacío / Ruido"]
 
 _CATEGORY_LABELS = {
@@ -690,7 +702,7 @@ class _LatencyCard(QFrame):
         self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels([
             "ARCHIVO", "TIPO", "DURACIÓN", "MODO",
-            "CONSENSO", "MOG2", "FRAMES", "T. PROCESO", "FACTOR",
+            "CONSENSO", "FILTRO MOG2", "FRAMES", "T. PROCESO", "FACTOR",
         ])
         hh = self._table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -707,7 +719,7 @@ class _LatencyCard(QFrame):
         self._table.setColumnWidth(2, 80)
         self._table.setColumnWidth(3, 90)
         self._table.setColumnWidth(4, 90)
-        self._table.setColumnWidth(5, 56)
+        self._table.setColumnWidth(5, 140)
         self._table.setColumnWidth(6, 80)
         self._table.setColumnWidth(7, 100)
         self._table.setColumnWidth(8, 70)
@@ -776,9 +788,11 @@ class _LatencyCard(QFrame):
             it4.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 4, it4)
 
-            # Col 5 — MOG2
-            motion_filter = rec.get("motion_filter", False)
-            it5mog = QTableWidgetItem("Sí" if motion_filter else "No")
+            # Col 5 — Filtro MOG2 (nuevo campo; compatibilidad con registro legacy bool)
+            mode_str = rec.get("motion_filter_mode")
+            if mode_str is None:
+                mode_str = "high_contrast" if rec.get("motion_filter", False) else "none"
+            it5mog = QTableWidgetItem(_fmt_motion_mode(mode_str))
             it5mog.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._table.setItem(i, 5, it5mog)
 
@@ -816,14 +830,16 @@ class _LatencyCard(QFrame):
                 if duration_sec is not None and duration_sec > 0 else "—"
             )
             consensus_mode = rec.get("consensus_mode", "static")
-            motion_filter  = rec.get("motion_filter", False)
+            mode_str = rec.get("motion_filter_mode")
+            if mode_str is None:
+                mode_str = "high_contrast" if rec.get("motion_filter", False) else "none"
             out.append({
                 "archivo":              rec.get("filename", "—"),
                 "tipo":                 rec.get("type", "—"),
                 "duracion":             dur_str,
                 "modo":                 rec.get("mode", "—"),
                 "consenso":             "Deslizante" if consensus_mode == "sliding" else "Estático",
-                "mog2":                 "Sí" if motion_filter else "No",
+                "filtro_mog2":          _fmt_motion_mode(mode_str),
                 "frames_analizados":    str(frames) if frames is not None else "—",
                 "tiempo_procesamiento": _fmt_time(processing_sec),
                 "factor":               factor_str,

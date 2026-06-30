@@ -61,7 +61,9 @@ REJECTION_THRESHOLD    = float(_CONFIG.get("rejection_threshold",    0.25))
 KNN_K                  = int(  _CONFIG.get("knn_k",                  5))
 _SLIDING_P_DEFAULT     = int(  _CONFIG.get("sliding_close_quorum_P", 3))
 _SLIDING_THRESHOLD     = float(_CONFIG.get("sliding_close_threshold", CONFIDENCE_THRESHOLD))
-_MOTION_MIN_AREA       = int(  _CONFIG.get("motion_filter_min_area",  500))
+_MOTION_HIGH_CONTRAST_AREA = int(  _CONFIG.get("motion_filter_high_contrast_area",  500))
+_MOTION_LOW_CONTRAST_AREA  = int(  _CONFIG.get("motion_filter_low_contrast_area",   100))
+_ADAPTIVE_LUMINANCE_THRESH = float(_CONFIG.get("motion_filter_adaptive_luminance_threshold", 60.0))
 
 
 # ===========================================================================
@@ -116,6 +118,61 @@ class MotionFilter:
     def last_area(self) -> float:
         """Área total de contornos del último frame procesado."""
         return self._last_area
+
+
+# ---------------------------------------------------------------------------
+# Detección de condición de iluminación para modo adaptativo
+# ---------------------------------------------------------------------------
+
+def detect_lighting_condition(
+    video_path:      "str | Path",
+    n_sample_frames: int = 10,
+) -> str:
+    """
+    Analiza la luminancia promedio de una muestra de frames del video.
+
+    Muestrea n_sample_frames frames distribuidos uniformemente desde el inicio
+    del video y calcula el brillo medio (canal Y tras conversión BGR→GRAY).
+
+    Returns:
+        "low_contrast"  si luminancia promedio < _ADAPTIVE_LUMINANCE_THRESH
+        "high_contrast" en caso contrario (o si el video no pudo abrirse).
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        logger.warning("[detect_lighting_condition] No se pudo abrir: %s", video_path)
+        return "high_contrast"
+
+    try:
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total <= 0:
+            return "high_contrast"
+
+        step = max(1, total // (n_sample_frames * 2))
+        luminances: list[float] = []
+        fi = 0
+
+        while cap.isOpened() and len(luminances) < n_sample_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if fi % step == 0:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                luminances.append(float(gray.mean()))
+            fi += 1
+    finally:
+        cap.release()
+
+    if not luminances:
+        return "high_contrast"
+
+    avg = sum(luminances) / len(luminances)
+    result = "low_contrast" if avg < _ADAPTIVE_LUMINANCE_THRESH else "high_contrast"
+    logger.debug(
+        "[detect_lighting_condition] luminancia_promedio=%.1f umbral=%.1f → %s",
+        avg, _ADAPTIVE_LUMINANCE_THRESH, result,
+    )
+    return result
 
 
 # ===========================================================================
@@ -788,26 +845,27 @@ class VideoProcessor:
 
     def __init__(
         self,
-        embedder:           BioCLIPEmbedder,
-        classifier:         SpeciesClassifier,
-        N:                  int  = 30,
-        K:                  int  = 10,
-        M:                  int  = 6,
-        P:                  int  = _SLIDING_P_DEFAULT,
-        batch_size:         int  = 8,
-        consensus_mode:     str  = "static",
-        use_motion_filter:  bool = False,
+        embedder:              BioCLIPEmbedder,
+        classifier:            SpeciesClassifier,
+        N:                     int  = 30,
+        K:                     int  = 10,
+        M:                     int  = 6,
+        P:                     int  = _SLIDING_P_DEFAULT,
+        batch_size:            int  = 8,
+        consensus_mode:        str  = "static",
+        motion_filter_mode:    str  = "none",
     ) -> None:
-        self._embedder          = embedder
-        self._classifier        = classifier
-        self._catalog           = classifier._catalog
-        self.N                  = N
-        self.K                  = K
-        self.M                  = M
-        self.P                  = P
-        self.batch_size         = batch_size
-        self.consensus_mode     = consensus_mode
-        self.use_motion_filter  = use_motion_filter
+        self._embedder                      = embedder
+        self._classifier                    = classifier
+        self._catalog                       = classifier._catalog
+        self.N                              = N
+        self.K                              = K
+        self.M                              = M
+        self.P                              = P
+        self.batch_size                     = batch_size
+        self.consensus_mode                 = consensus_mode
+        self.motion_filter_mode             = motion_filter_mode
+        self.effective_motion_filter_mode: str = "none"
 
     def process(
         self,
@@ -821,10 +879,10 @@ class VideoProcessor:
         de frames mientras BioCLIP procesa el actual, eliminando el tiempo muerto
         entre batches.
 
-        Si use_motion_filter=True, aplica MOG2 antes de enviar frames a BioCLIP.
+        Si motion_filter_mode != "none", aplica MOG2 antes de enviar frames a BioCLIP.
         Los frames descartados por MOG2 se agrupan en eventos con confidence_level="mog2".
         Si el video tiene menos de 30 frames submuestreados, MOG2 se desactiva
-        automáticamente para ese video.
+        automáticamente para ese video (effective_motion_filter_mode queda en "none").
 
         Args:
             video_path:        Ruta al archivo de video.
@@ -842,14 +900,37 @@ class VideoProcessor:
         est_sampled  = max(1, math.ceil(total_frames / self.N))
         cap.release()
 
-        # Auto-desactivar MOG2 en videos con muy pocos frames submuestreados
-        effective_motion_filter = self.use_motion_filter
-        if self.use_motion_filter and est_sampled < 30:
+        # Resolver el área efectiva del filtro según el modo seleccionado.
+        # Si el video tiene < 30 frames submuestreados, el filtro se desactiva.
+        _mode = self.motion_filter_mode
+        effective_min_area: Optional[int]
+
+        if _mode == "none":
+            effective_min_area = None
+            self.effective_motion_filter_mode = "none"
+        elif est_sampled < 30:
             logger.warning(
                 "MOG2 desactivado: video con menos de 30 frames submuestreados (%d)",
                 est_sampled,
             )
-            effective_motion_filter = False
+            effective_min_area = None
+            self.effective_motion_filter_mode = "none"
+        elif _mode == "high_contrast":
+            effective_min_area = _MOTION_HIGH_CONTRAST_AREA
+            self.effective_motion_filter_mode = "high_contrast"
+        elif _mode == "low_contrast":
+            effective_min_area = _MOTION_LOW_CONTRAST_AREA
+            self.effective_motion_filter_mode = "low_contrast"
+        elif _mode == "adaptive":
+            _resolved = detect_lighting_condition(video_path)
+            effective_min_area = (
+                _MOTION_HIGH_CONTRAST_AREA if _resolved == "high_contrast"
+                else _MOTION_LOW_CONTRAST_AREA
+            )
+            self.effective_motion_filter_mode = f"adaptive_{_resolved}"
+        else:
+            effective_min_area = None
+            self.effective_motion_filter_mode = "none"
 
         frame_predictions:    list[dict]  = []
         rejected_timestamps:  list[float] = []
@@ -864,7 +945,7 @@ class VideoProcessor:
             """Extrae, convierte a RGB y agrupa frames en batches; corre en thread separado."""
             local_cap = cv2.VideoCapture(str(video_path))
             local_fps = local_cap.get(cv2.CAP_PROP_FPS) or 30.0
-            mf = MotionFilter(min_contour_area=_MOTION_MIN_AREA) if effective_motion_filter else None
+            mf = MotionFilter(min_contour_area=effective_min_area) if effective_min_area is not None else None
 
             imgs: list[Image.Image] = []
             meta: list[dict]        = []
