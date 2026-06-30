@@ -77,7 +77,7 @@ from ..styles import (
     validation_badge_qss,
 )
 
-from ..workers.analysis_worker import DeepAnalysisWorker
+from ...workers.analysis_worker import DeepAnalysisWorker
 
 # ---------------------------------------------------------------------------
 # Constantes
