@@ -60,6 +60,7 @@ except ImportError:
 
 from ..styles import (
     ACCENT,
+    CARD_BG,
     ERROR,
     NEUTRAL,
     SUCCESS,
@@ -1004,6 +1005,7 @@ class _DeepAnalysisWidget(QWidget):
         self._tabs.addTab(self._attn_canvas_widget, "Mapa de atención")
 
         # Figuras matplotlib (creadas una sola vez, reutilizadas)
+        self._btn_save_attn = None
         if _MPL_AVAILABLE:
             self._dist_fig    = Figure(figsize=(3.6, 2.4), facecolor="#050505")
             self._dist_canvas = FigureCanvasQTAgg(self._dist_fig)
@@ -1014,6 +1016,11 @@ class _DeepAnalysisWidget(QWidget):
             self._attn_canvas = FigureCanvasQTAgg(self._attn_fig)
             self._attn_canvas.setStyleSheet("background: transparent;")
             self._attn_lay.addWidget(self._attn_canvas)
+
+            self._btn_save_attn = _export_btn("Guardar imagen")
+            self._btn_save_attn.setEnabled(False)
+            self._btn_save_attn.clicked.connect(self._on_save_attention)
+            self._attn_lay.addWidget(self._btn_save_attn, alignment=Qt.AlignmentFlag.AlignRight)
         else:
             for lay, msg in (
                 (self._dist_lay, "matplotlib no disponible"),
@@ -1065,6 +1072,8 @@ class _DeepAnalysisWidget(QWidget):
         self._dist_canvas.draw()
         self._attn_fig.clear()
         self._attn_canvas.draw()
+        if self._btn_save_attn is not None:
+            self._btn_save_attn.setEnabled(False)
 
     def _on_analyze(self) -> None:
         if self._event is None:
@@ -1098,6 +1107,51 @@ class _DeepAnalysisWidget(QWidget):
     def _on_error(self, msg: str) -> None:
         self._lbl_error.setText(f"Error: {msg}")
         self._lbl_error.show()
+
+    # ------------------------------------------------------------------
+    # Guardar mapa de atención
+
+    def _on_save_attention(self) -> None:
+        stem = self._filepath.stem if self._filepath else "imagen"
+        start = getattr(self._event, "start_time", None)
+        end   = getattr(self._event, "end_time",   None)
+        if start is not None and end is not None:
+            interval = f"{int(start)}s-{int(end)}s"
+        else:
+            ts = getattr(self._event, "representative_timestamp", None)
+            interval = f"{int(ts)}s" if ts is not None else "attn"
+        suggested_name = f"mapa_atencion_{stem}_{interval}.png"
+        initial_path = (
+            str(self._filepath.parent / suggested_name)
+            if self._filepath else suggested_name
+        )
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar mapa de atención",
+            initial_path,
+            "Imágenes (*.png *.jpg)",
+        )
+        if not path:
+            return
+
+        self._attn_fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=CARD_BG)
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Imagen guardada")
+        msg.setText(f"Guardado en:\n{path}")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setStyleSheet("""
+            QMessageBox { background-color: #1a1a1a; color: #edefec; }
+            QMessageBox QLabel { color: #edefec; }
+            QPushButton {
+                background-color: #1f2c1d; color: #99e17a;
+                border: 1px solid #99e17a; border-radius: 6px;
+                padding: 4px 12px; min-width: 60px;
+            }
+            QPushButton:hover { background-color: #2d3f2a; }
+        """)
+        msg.exec()
 
     # ------------------------------------------------------------------
     # Render de distancias
@@ -1176,6 +1230,8 @@ class _DeepAnalysisWidget(QWidget):
         )
         self._attn_fig.tight_layout(pad=0.3)
         self._attn_canvas.draw()
+        if self._btn_save_attn is not None:
+            self._btn_save_attn.setEnabled(True)
 
 
 # ---------------------------------------------------------------------------
