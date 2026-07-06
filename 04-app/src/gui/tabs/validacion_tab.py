@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
@@ -196,6 +197,34 @@ _METHOD_TEXTS = {
     "Consenso":     "Evento ambiguo — quórum no alcanzado en ventana de 10 frames",
     "Filtro MOG2":  "Frame descartado por el filtro de movimiento — área de movimiento < umbral configurado",
 }
+
+_ACTIVATION_METHOD_DESCRIPTIONS = {
+    "rollout": "Flujo de atención acumulado a través de todas las capas del ViT (Abnar & Zuidema, 2020)",
+    "gradcam": "Contribución específica a la predicción de la especie asignada (Selvaraju et al., 2017)",
+}
+
+
+def _radio_qss() -> str:
+    return f"""
+        QRadioButton {{
+            color: {TEXT_PRIMARY};
+            font-size: 11px;
+            font-weight: 600;
+            spacing: 6px;
+            background: transparent;
+        }}
+        QRadioButton::indicator {{
+            width: 13px;
+            height: 13px;
+            border-radius: 7px;
+            border: 1px solid rgba(153,225,122,120);
+            background: rgba(0,0,0,80);
+        }}
+        QRadioButton::indicator:checked {{
+            background: {ACCENT};
+            border: 1px solid {ACCENT};
+        }}
+    """
 
 
 def _load_frame(filepath: Path, frame_idx: int) -> Optional[QPixmap]:
@@ -912,7 +941,12 @@ class _DeepAnalysisWidget(QWidget):
 
     Los resultados se muestran en un QTabWidget con dos sub-pestañas:
       - Distancias temporales: gráfico matplotlib (timestamps × distancias coseno)
-      - Mapa de atención: frame representativo con heatmap superpuesto
+      - Mapa de activación: frame representativo con heatmap superpuesto,
+        con selector entre Attention Rollout y GradCAM
+
+    Los mapas (rollout, gradcam, frame) se cachean por evento — cambiar el
+    método del selector o reabrir el mismo evento renderiza desde la caché
+    sin relanzar el worker. La caché se invalida al cambiar de evento.
 
     El embedder se inyecta desde fuera via set_embedder(). Si no hay embedder
     disponible al hacer click, el worker lo crea en segundo plano y emite
@@ -929,6 +963,9 @@ class _DeepAnalysisWidget(QWidget):
         self._filepath = None
         self._embedder = None
         self._worker: Optional[DeepAnalysisWorker] = None
+
+        self._cache: dict = {}          # {"rollout": array, "gradcam": array, "frame": array}
+        self._cached_event_key: str = ""
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1000,14 +1037,36 @@ class _DeepAnalysisWidget(QWidget):
         self._dist_lay = QVBoxLayout(self._dist_canvas_widget)
         self._dist_lay.setContentsMargins(4, 4, 4, 4)
 
-        # Sub-pestaña "Mapa de atención"
+        # Sub-pestaña "Mapa de activación"
         self._attn_canvas_widget = QWidget()
         self._attn_canvas_widget.setStyleSheet("background: transparent;")
         self._attn_lay = QVBoxLayout(self._attn_canvas_widget)
         self._attn_lay.setContentsMargins(4, 4, 4, 4)
 
         self._tabs.addTab(self._dist_canvas_widget, "Distancias temporales")
-        self._tabs.addTab(self._attn_canvas_widget, "Mapa de atención")
+        self._tabs.addTab(self._attn_canvas_widget, "Mapa de activación")
+
+        # Selector de método: Attention Rollout / GradCAM
+        method_row = QHBoxLayout()
+        method_row.setSpacing(14)
+        self._radio_rollout = QRadioButton("Attention Rollout")
+        self._radio_gradcam = QRadioButton("GradCAM")
+        self._radio_rollout.setStyleSheet(_radio_qss())
+        self._radio_gradcam.setStyleSheet(_radio_qss())
+        self._radio_rollout.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._radio_gradcam.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._radio_rollout.setChecked(True)
+        method_row.addWidget(self._radio_rollout)
+        method_row.addWidget(self._radio_gradcam)
+        method_row.addStretch()
+        self._attn_lay.addLayout(method_row)
+
+        self._lbl_method_desc = QLabel(_ACTIVATION_METHOD_DESCRIPTIONS["rollout"])
+        self._lbl_method_desc.setWordWrap(True)
+        self._lbl_method_desc.setStyleSheet(body_qss(0.6))
+        self._attn_lay.addWidget(self._lbl_method_desc)
+
+        self._radio_rollout.toggled.connect(self._on_method_changed)
 
         # Figuras matplotlib (creadas una sola vez, reutilizadas)
         self._btn_save_attn = None
@@ -1047,14 +1106,23 @@ class _DeepAnalysisWidget(QWidget):
         self._event    = event
         self._filepath = filepath
         self._stop_worker()
+        if self._event_key() != self._cached_event_key:
+            self._cache = {}
+            self._cached_event_key = ""
         self._hide_results()
 
     # ------------------------------------------------------------------
     # Internos
 
+    def _event_key(self) -> str:
+        fp    = str(self._filepath) if self._filepath else ""
+        start = getattr(self._event, "start_time", None)
+        end   = getattr(self._event, "end_time",   None)
+        return f"{fp}_{start}_{end}"
+
     def _stop_worker(self) -> None:
         if self._worker is not None:
-            self._worker.attention_ready.disconnect()
+            self._worker.maps_ready.disconnect()
             self._worker.distances_ready.disconnect()
             self._worker.error_occurred.disconnect()
             self._worker.embedder_created.disconnect()
@@ -1083,6 +1151,15 @@ class _DeepAnalysisWidget(QWidget):
     def _on_analyze(self) -> None:
         if self._event is None:
             return
+
+        if self._cache and self._cached_event_key == self._event_key():
+            self._stop_worker()
+            self._lbl_error.hide()
+            self._render_distances_from_event()
+            self._render_from_cache()
+            self._results.show()
+            return
+
         self._stop_worker()
         self._clear_results()
         self._lbl_error.hide()
@@ -1096,7 +1173,7 @@ class _DeepAnalysisWidget(QWidget):
             embedder = self._embedder,
             filepath = self._filepath,
         )
-        self._worker.attention_ready.connect(self._on_attention_ready)
+        self._worker.maps_ready.connect(self._on_maps_ready)
         self._worker.distances_ready.connect(self._on_distances_ready)
         self._worker.error_occurred.connect(self._on_error)
         self._worker.embedder_created.connect(self.embedder_created)
@@ -1113,10 +1190,35 @@ class _DeepAnalysisWidget(QWidget):
         self._lbl_error.setText(f"Error: {msg}")
         self._lbl_error.show()
 
+    def _render_distances_from_event(self) -> None:
+        distances  = list(getattr(self._event, "frame_distances",  []))
+        timestamps = list(getattr(self._event, "frame_timestamps", []))
+        self._on_distances_ready(timestamps, distances)
+
     # ------------------------------------------------------------------
-    # Guardar mapa de atención
+    # Caché de mapas de activación (rollout / GradCAM) por evento
+
+    def _on_maps_ready(self, original, rollout, gradcam) -> None:
+        self._cache = {"frame": original, "rollout": rollout, "gradcam": gradcam}
+        self._cached_event_key = self._event_key()
+        self._render_from_cache()
+
+    def _on_method_changed(self) -> None:
+        method = "gradcam" if self._radio_gradcam.isChecked() else "rollout"
+        self._lbl_method_desc.setText(_ACTIVATION_METHOD_DESCRIPTIONS[method])
+        self._render_from_cache()
+
+    def _render_from_cache(self) -> None:
+        if not _MPL_AVAILABLE or not self._cache:
+            return
+        method = "gradcam" if self._radio_gradcam.isChecked() else "rollout"
+        self._render_activation_map(self._cache["frame"], self._cache[method])
+
+    # ------------------------------------------------------------------
+    # Guardar mapa de activación
 
     def _on_save_attention(self) -> None:
+        method = "gradcam" if self._radio_gradcam.isChecked() else "rollout"
         stem = self._filepath.stem if self._filepath else "imagen"
         start = getattr(self._event, "start_time", None)
         end   = getattr(self._event, "end_time",   None)
@@ -1124,8 +1226,8 @@ class _DeepAnalysisWidget(QWidget):
             interval = f"{int(start)}s-{int(end)}s"
         else:
             ts = getattr(self._event, "representative_timestamp", None)
-            interval = f"{int(ts)}s" if ts is not None else "attn"
-        suggested_name = f"mapa_atencion_{stem}_{interval}.png"
+            interval = f"{int(ts)}s" if ts is not None else "activacion"
+        suggested_name = f"mapa_{method}_{stem}_{interval}.png"
         initial_path = (
             str(self._filepath.parent / suggested_name)
             if self._filepath else suggested_name
@@ -1217,9 +1319,9 @@ class _DeepAnalysisWidget(QWidget):
         self._dist_canvas.draw()
 
     # ------------------------------------------------------------------
-    # Render del mapa de atención
+    # Render del mapa de activación
 
-    def _on_attention_ready(self, original: "_np_mpl.ndarray", attn_map: "_np_mpl.ndarray") -> None:
+    def _render_activation_map(self, original: "_np_mpl.ndarray", activation_map: "_np_mpl.ndarray") -> None:
         if not _MPL_AVAILABLE:
             return
 
@@ -1228,9 +1330,9 @@ class _DeepAnalysisWidget(QWidget):
         ax.set_facecolor("#0a0a0a")
         ax.axis("off")
         ax.imshow(original)
-        ax.imshow(attn_map, cmap="jet", alpha=0.5, vmin=0.0, vmax=1.0)
+        ax.imshow(activation_map, cmap="jet", alpha=0.5, vmin=0.0, vmax=1.0)
         ax.set_title(
-            "Zonas de mayor atención del modelo resaltadas en rojo",
+            "Zonas de mayor activación del modelo resaltadas en rojo",
             fontsize=6.5, color=ACCENT, pad=3,
         )
         self._attn_fig.tight_layout(pad=0.3)

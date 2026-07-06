@@ -168,6 +168,7 @@ def detect_lighting_condition(
 
     avg = sum(luminances) / len(luminances)
     result = "low_contrast" if avg < _ADAPTIVE_LUMINANCE_THRESH else "high_contrast"
+    logger.info("Luminancia promedio detectada: %.2f (umbral: %d) -> modo: %s", avg, _ADAPTIVE_LUMINANCE_THRESH, result)
     logger.debug(
         "[detect_lighting_condition] luminancia_promedio=%.1f umbral=%.1f → %s",
         avg, _ADAPTIVE_LUMINANCE_THRESH, result,
@@ -420,6 +421,88 @@ class BioCLIPEmbedder:
         v_min, v_max = mask_2d.min(), mask_2d.max()
         if v_max > v_min:
             mask_2d = (mask_2d - v_min) / (v_max - v_min)
+
+        mask_img = Image.fromarray((mask_2d * 255).astype(np.uint8)).resize(
+            (W, H), Image.Resampling.BILINEAR
+        )
+        return np.array(mask_img).astype(np.float32) / 255.0
+
+    def get_gradcam(self, pil_image: Image.Image, centroid: np.ndarray) -> np.ndarray:
+        """
+        Calcula Grad-CAM sobre el último bloque del ViT respecto al centroide dado.
+
+        Registra un forward hook y un backward hook sobre el último resblock del
+        transformer para capturar sus activaciones y los gradientes de la similitud
+        coseno (embedding de la imagen vs. centroide) respecto a esas activaciones.
+
+        Grad-CAM clásico (Selvaraju et al., 2017) adaptado a tokens de un ViT:
+        el peso de cada canal de features surge de promediar su gradiente sobre
+        los tokens (no al revés — el bloque alimenta directamente a la LayerNorm
+        final del ViT, cuyo backward anula el promedio de gradientes por token:
+        queda ~0 por la propiedad de media nula de LayerNorm sobre su dimensión
+        normalizada). Esos pesos por canal ponderan las activaciones y se suman
+        sobre la dimensión de features para obtener un score por token.
+
+        Returns:
+            np.ndarray shape (H, W) float32, valores normalizados 0–1.
+        """
+        W, H = pil_image.size
+        block = self._model.visual.transformer.resblocks[-1]
+
+        activations: list[torch.Tensor] = []
+        gradients:   list[torch.Tensor] = []
+
+        def _forward_hook(module, inputs, output):
+            activations.append(output)
+
+        def _backward_hook(module, grad_input, grad_output):
+            gradients.append(grad_output[0])
+
+        fwd_handle = block.register_forward_hook(_forward_hook)
+        bwd_handle = block.register_full_backward_hook(_backward_hook)
+
+        try:
+            with torch.enable_grad():
+                img_t = self._preprocess(pil_image).unsqueeze(0)
+                img_t.requires_grad_(True)
+
+                emb = self._model.encode_image(img_t)
+                emb = emb / emb.norm(dim=-1, keepdim=True)
+
+                centroid_t = torch.from_numpy(centroid).float().unsqueeze(0)
+                centroid_t = centroid_t / centroid_t.norm(dim=-1, keepdim=True)
+
+                score = (emb * centroid_t).sum()
+                self._model.zero_grad(set_to_none=True)
+                score.backward()
+        finally:
+            fwd_handle.remove()
+            bwd_handle.remove()
+
+        if not activations or not gradients:
+            return np.zeros((H, W), dtype=np.float32)
+
+        # Activaciones/gradientes del bloque: (B, T, D) con B=1 — se descarta
+        # la dimensión de batch (tamaño 1) en cualquier orden en que aparezca.
+        act  = activations[0].detach()
+        grad = gradients[0].detach()
+        batch_dim = 0 if act.shape[0] == 1 else 1
+        act  = act.squeeze(batch_dim)   # (T, D)
+        grad = grad.squeeze(batch_dim)  # (T, D)
+
+        weights_per_channel = grad.mean(dim=0)                                        # (D,)
+        cam = torch.relu((weights_per_channel.unsqueeze(0) * act).sum(dim=-1))        # (T,)
+
+        # Excluir token [CLS] (índice 0), quedarse con tokens de parche
+        cam_np    = cam[1:].numpy()
+        grid_size = int(round(len(cam_np) ** 0.5))
+        mask_2d   = cam_np.reshape(grid_size, grid_size)
+
+        v_min, v_max = mask_2d.min(), mask_2d.max()
+        if v_max > v_min:
+            mask_2d = (mask_2d - v_min) / (v_max - v_min)
+        else:
+            mask_2d = np.zeros_like(mask_2d)
 
         mask_img = Image.fromarray((mask_2d * 255).astype(np.uint8)).resize(
             (W, H), Image.Resampling.BILINEAR
@@ -931,6 +1014,12 @@ class VideoProcessor:
         else:
             effective_min_area = None
             self.effective_motion_filter_mode = "none"
+
+        area_efectiva = effective_min_area if effective_min_area is not None else 0
+        logger.info(
+            "Video: %s | Modo MOG2 solicitado: %s | Modo efectivo: %s | min_contour_area usado: %d",
+            video_path, self.motion_filter_mode, self.effective_motion_filter_mode, area_efectiva,
+        )
 
         frame_predictions:    list[dict]  = []
         rejected_timestamps:  list[float] = []
