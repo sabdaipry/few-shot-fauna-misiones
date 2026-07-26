@@ -620,6 +620,8 @@ def plot_per_class_coverage(
     global_percentiles: dict[str, float],
     backbone_name: str,
     out_dir: Path,
+    variant_label: str = "1-NN",
+    fig_stem: str = "03_per_class_coverage",
 ) -> None:
     """Barras horizontales de cobertura por especie bajo el umbral p95.
 
@@ -634,6 +636,8 @@ def plot_per_class_coverage(
         global_percentiles: Dict {f"p{p}": valor} de calibrate_threshold.
         backbone_name:      Nombre del backbone para el título.
         out_dir:            Directorio de salida.
+        variant_label:      Etiqueta de variante ("1-NN" o "Centroide").
+        fig_stem:           Nombre base del archivo de salida.
     """
     vals, labs = _filter_included(dmin_intra, species_labels, excluded)
     threshold_p95 = global_percentiles["p95"]
@@ -664,7 +668,7 @@ def plot_per_class_coverage(
     ax.set_yticklabels(sorted_species, fontsize=12)
     ax.set_xlabel("Cobertura (fracción de query ≤ umbral p95)", fontsize=14)
     ax.set_title(
-        f"Cobertura por especie bajo umbral p95 — {backbone_name}",
+        f"Cobertura por especie bajo umbral p95 — {backbone_name} ({variant_label})",
         fontsize=18, fontweight="bold",
     )
     ax.set_xlim(0, 1.05)
@@ -673,7 +677,7 @@ def plot_per_class_coverage(
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
 
-    _save_figure(fig, out_dir, "03_per_class_coverage")
+    _save_figure(fig, out_dir, fig_stem)
 
 
 def plot_per_class_dmin_boxplots(
@@ -683,6 +687,8 @@ def plot_per_class_dmin_boxplots(
     global_percentiles: dict[str, float],
     backbone_name: str,
     out_dir: Path,
+    variant_label: str = "1-NN",
+    fig_stem: str = "04_per_class_dmin_boxplots",
 ) -> None:
     """Box plots horizontales de distribución de d_min intra por especie.
 
@@ -696,6 +702,8 @@ def plot_per_class_dmin_boxplots(
         global_percentiles: Dict {f"p{p}": valor} de calibrate_threshold.
         backbone_name:      Nombre del backbone para el título.
         out_dir:            Directorio de salida.
+        variant_label:      Etiqueta de variante ("1-NN" o "Centroide").
+        fig_stem:           Nombre base del archivo de salida.
     """
     vals, labs = _filter_included(dmin_intra, species_labels, excluded)
     species_list = np.unique(labs)
@@ -734,7 +742,7 @@ def plot_per_class_dmin_boxplots(
     ax.set_yticklabels(sorted_species, fontsize=12)
     ax.set_xlabel("Distancia coseno d_min intra-clase", fontsize=14)
     ax.set_title(
-        f"Distribución de d_min por especie — {backbone_name}",
+        f"Distribución de d_min por especie — {backbone_name} ({variant_label})",
         fontsize=18, fontweight="bold",
     )
     ax.tick_params(axis="x", labelsize=13)
@@ -742,7 +750,7 @@ def plot_per_class_dmin_boxplots(
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
 
-    _save_figure(fig, out_dir, "04_per_class_dmin_boxplots")
+    _save_figure(fig, out_dir, fig_stem)
 
 
 def plot_1nn_vs_centroid_comparison(
@@ -1093,6 +1101,26 @@ def main() -> None:
         global_percentiles = calib_1nn["global_percentiles"],
         backbone_name      = "BioCLIP v2",
         out_dir            = figures_bio,
+    )
+    plot_per_class_coverage(
+        dmin_intra         = dmin_intra_centroid,
+        species_labels     = labels_bio,
+        excluded           = excluded,
+        global_percentiles = calib_centroid["global_percentiles"],
+        backbone_name      = "BioCLIP v2",
+        out_dir            = figures_bio,
+        variant_label      = "Centroide",
+        fig_stem           = "03_per_class_coverage_centroid",
+    )
+    plot_per_class_dmin_boxplots(
+        dmin_intra         = dmin_intra_centroid,
+        species_labels     = labels_bio,
+        excluded           = excluded,
+        global_percentiles = calib_centroid["global_percentiles"],
+        backbone_name      = "BioCLIP v2",
+        out_dir            = figures_bio,
+        variant_label      = "Centroide",
+        fig_stem           = "04_per_class_dmin_boxplots_centroid",
     )
     plot_1nn_vs_centroid_comparison(
         dmin_1nn       = dmin_intra_1nn,
