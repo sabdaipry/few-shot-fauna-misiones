@@ -7,6 +7,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import umap
+from adjustText import adjust_text
 from pathlib import Path
 from src.utils.logger import setup_logger
 
@@ -200,16 +201,19 @@ def plot_pareto(df_sum, df_time, metric="Accuracy", output_path="pareto.png"):
         linewidth=1
     )
 
-    for i, row in df.iterrows():
-        plt.text(
+    ax = plt.gca()
+    texts = [
+        ax.text(
             row['Backbone Time (ms)'],
-            row[metric] + 0.003,
+            row[metric],
             row['Embedding Model'],
             fontsize=11,
             ha='center',
             fontweight='bold',
             alpha=0.8
         )
+        for _, row in df.iterrows()
+    ]
 
     plt.title(f"Frontera de Pareto: Latencia vs {metric}", fontweight='bold')
     plt.xlabel("Latencia por Imagen (ms) [Log Scale]")
@@ -217,6 +221,15 @@ def plot_pareto(df_sum, df_time, metric="Accuracy", output_path="pareto.png"):
     plt.xscale('log')
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title="Modelo / Dimensión")
+
+    adjust_text(
+        texts,
+        x=df['Backbone Time (ms)'].values,
+        y=df[metric].values,
+        ax=ax,
+        expand=(1.6, 1.9),
+        arrowprops=dict(arrowstyle='-', color='gray', lw=0.6, alpha=0.7)
+    )
 
     _save_figure(output_path)
 
