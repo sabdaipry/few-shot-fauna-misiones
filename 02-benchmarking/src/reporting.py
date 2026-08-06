@@ -18,6 +18,109 @@ def get_custom_sort_key(item):
     if 'clip' in model_name:     return (5, model_name)
     return (99, model_name) # Otros al final
 
+def generate_holdout_section_html(holdout):
+    """
+    Genera el bloque HTML de la evaluación final held-out sobre query_test
+    (una sola corrida, después de fijar todo el pipeline con query_dev).
+    Devuelve "" si no hay datos de final_holdout_evaluation/ disponibles.
+    """
+    if not holdout:
+        return ""
+
+    df_summ = holdout['summary']
+    df_pb = holdout['point_vs_bootstrap']
+    df_tax = holdout['taxonomic_errors']
+    df_thr = holdout.get('threshold_validation')
+
+    def basic_ci(classifier, metric):
+        row = df_pb[(df_pb['Classifier'] == classifier) & (df_pb['Metric'] == metric)]
+        if row.empty:
+            return None
+        r = row.iloc[0]
+        return r['Basic_CI_lower_centered_on_point'], r['Basic_CI_upper_centered_on_point']
+
+    cards_html = ""
+    for _, row in df_summ.iterrows():
+        clf = row['Classifier']
+        is_production = (clf == 'Nearest Centroid')
+        acc_ci = basic_ci(clf, 'Accuracy')
+        f1_ci = basic_ci(clf, 'F1_Macro')
+        badge = (
+            '<span class="badge bg-success">Pipeline de producción (Centroide)</span>'
+            if is_production else '<span class="badge bg-secondary">Referencia</span>'
+        )
+        acc_ci_html = f"IC95: {acc_ci[0]*100:.2f}–{acc_ci[1]*100:.2f}%" if acc_ci else ""
+        f1_ci_html = f"IC95: {f1_ci[0]*100:.2f}–{f1_ci[1]*100:.2f}%" if f1_ci else ""
+        border_color = "#2ecc71" if is_production else "#ced4da"
+        cards_html += f"""
+        <div class="col-md-6">
+            <div class="metric-box h-100" style="border: 2px solid {border_color};">
+                <div class="mb-2">{badge}</div>
+                <h6 class="fw-bold">{row['Embedding Model']} + {clf}</h6>
+                <div class="row mt-3 text-center">
+                    <div class="col-4">
+                        <div class="metric-val" style="font-size:1.5rem;">{row['Accuracy']*100:.2f}%</div>
+                        <div class="metric-lbl">Top-1</div>
+                        <small class="text-muted">{acc_ci_html}</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="metric-val" style="font-size:1.5rem;">{row['Top-5 Accuracy']*100:.2f}%</div>
+                        <div class="metric-lbl">Top-5</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="metric-val" style="font-size:1.5rem;">{row['F1-Macro']*100:.2f}%</div>
+                        <div class="metric-lbl">F1-macro</div>
+                        <small class="text-muted">{f1_ci_html}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+
+    tax_table_html = df_tax.round(2).to_html(
+        classes="table table-striped table-hover table-bordered table-sm", index=False, border=0
+    )
+
+    threshold_html = ""
+    if df_thr is not None and not df_thr.empty:
+        r = df_thr.iloc[0]
+        threshold_html = f"""
+        <div class="card mt-3"><div class="card-body">
+            <h6 class="fw-bold">Validación del umbral de confianza sobre el holdout</h6>
+            <p class="small text-muted mb-3">
+                Umbral calibrado en <code>query_dev</code> (percentil 95, centroide), aplicado
+                congelado sobre <code>query_test</code> sin volver a ajustarlo.
+            </p>
+            <div class="row text-center">
+                <div class="col-md-3"><div class="metric-val">{r['threshold_value']:.5f}</div><div class="metric-lbl">Umbral (coseno)</div></div>
+                <div class="col-md-3"><div class="metric-val">{r['coverage']*100:.2f}%</div><div class="metric-lbl">Cobertura</div></div>
+                <div class="col-md-3"><div class="metric-val">{r['inter_contamination']*100:.2f}%</div><div class="metric-lbl">Contaminación inter-clase</div></div>
+                <div class="col-md-3"><div class="metric-val">{r['separation_gap']:.4f}</div><div class="metric-lbl">Separation gap</div></div>
+            </div>
+        </div></div>
+        """
+
+    return f"""
+    <h3 class="section-title">🔒 Evaluación Final Held-Out (una sola corrida)</h3>
+    <div class="alert alert-warning">
+        <strong>Importante:</strong> estos números provienen de <code>query_test</code> (1102 imágenes,
+        87 especies), un subconjunto del query set que <strong>nunca se usó</strong> para elegir
+        backbone, clasificador, métrica de distancia ni umbrales — todas esas decisiones se tomaron
+        exclusivamente con <code>query_dev</code> (secciones de abajo). <code>query_test</code> se
+        evaluó <strong>una sola vez</strong>, después de fijar todo el pipeline, y no se vuelve a
+        tocar salvo que se rehaga el proceso de selección desde cero.
+    </div>
+    <div class="row g-3 mb-3">
+        {cards_html}
+    </div>
+    <div class="card"><div class="card-body">
+        <h6 class="fw-bold">Desglose de errores taxonómicos (holdout)</h6>
+        <div class="table-responsive">{tax_table_html}</div>
+    </div></div>
+    {threshold_html}
+    """
+
+
 def generate_html_report(data, output_file, umap_files, backbones_list, classifiers_list, stats):
     """Genera el dashboard HTML."""
     
@@ -85,8 +188,8 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
         <div class="col-md-3">
             <div class="metric-box border-start border-4 color-sand">
                 <div class="metric-val color-sand" style="font-size: 1.8rem;"><strong>{stats.get('query_count', 0)}</strong></div>
-                <div class="metric-lbl">Set de <i>Query</i></div>
-                <small class="text-muted">Validación</small>
+                <div class="metric-lbl">Set de <i>Query (dev)</i></div>
+                <small class="text-muted">Selección de arquitectura ({stats.get('query_test_count', 0)} más en <i>query_test</i>, holdout)</small>
             </div>
         </div>
     </div>
@@ -164,6 +267,9 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
 
     table_main_html = df_full_display.to_html(classes=table_class, index=False, border=0)
 
+    # 4b. Sección de evaluación final held-out (query_test, una sola corrida)
+    holdout_section_html = generate_holdout_section_html(data.get('holdout'))
+
     # 5. Galería UMAP (ordenada)
     sorted_umaps = sorted(umap_files.items(), key=get_custom_sort_key)
 
@@ -217,8 +323,17 @@ def generate_html_report(data, output_file, umap_files, backbones_list, classifi
 
         <h4 class="text-muted mb-3">Resumen del Dataset Evaluado</h4>
         {stats_html}
-        
-        <h3 class="section-title">🏆 Top 10 Combinaciones (Accuracy)</h3>
+
+        {holdout_section_html}
+
+        <div class="alert alert-info">
+            <strong>De acá en adelante:</strong> todas las secciones que siguen (benchmark comparativo,
+            rankings, UMAPs, tabla completa) se calcularon sobre <code>query_dev</code> — es el
+            benchmark exploratorio usado para <em>elegir</em> arquitectura, clasificador y umbrales,
+            no el número final. El número final está arriba, en "Evaluación Final Held-Out".
+        </div>
+
+        <h3 class="section-title">🏆 Top 10 Combinaciones (query_dev, Accuracy)</h3>
         <div class="row mb-4 justify-content-center g-3">{top_cards_html}</div>
 
         <h3 class="section-title">📊 Resumen Comparativo por Backbone</h3>

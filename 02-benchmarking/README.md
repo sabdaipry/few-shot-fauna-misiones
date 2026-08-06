@@ -10,7 +10,7 @@ El pipeline parte de un dataset de imágenes organizado taxonómicamente, extrae
 
 - Un índice del dataset (`dataset_index.csv`) con split galería/query por especie e IVC integrado.
 - Embeddings precalculados por backbone (`data/features/`).
-- Una tabla comparativa de métricas para las 133 combinaciones backbone × clasificador (`benchmark_summary.csv`).
+- Una tabla comparativa de métricas para las 209 combinaciones backbone × clasificador (19×11, incluyendo variantes DINO `_gap` y Faiss; la comparación principal reportada es 15×7=105 — ver `CLAUDE.md` de este módulo) (`benchmark_summary.csv`).
 - Intervalos de confianza bootstrap al 95% estratificados por clase (`bootstrap_ci.csv`).
 - Mediciones de latencia, escalabilidad y comportamiento ante datos nuevos (incremental / outliers).
 - Un reporte HTML final con leaderboards, heatmaps, UMAPs, matrices de confusión y análisis por clase taxonómica.

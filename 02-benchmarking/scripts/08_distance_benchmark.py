@@ -1,9 +1,9 @@
 """Benchmark de métricas de distancia para clasificación 1-NN few-shot.
 
-Evalúa 5 métricas de distancia (coseno, euclidiana, euclidiana L2-norm,
-Manhattan, Mahalanobis) sobre los embeddings de gallery/query de bioclip_v2 y
-dinov2_small. Para cada combinación backbone × métrica mide accuracy 1-NN y
-latencia de búsqueda por imagen.
+Evalúa 4 métricas de distancia (coseno, euclidiana, euclidiana L2-norm,
+Manhattan) sobre los embeddings de gallery/query de 5 backbones (bioclip_v2,
+dinov3_small, dinov2_small, resnet50, convnextv2_tiny). Para cada combinación
+backbone × métrica mide accuracy 1-NN y latencia de búsqueda por imagen.
 
 Guarda:
 - data/benchmark_results/distance_benchmark.csv
@@ -176,10 +176,11 @@ def measure_latency(
     n_repeats: int = 10,
     seed: int = 29,
 ) -> dict[str, float]:
-    """Mide latencia de búsqueda con muestra estratificada y repeticiones.
+    """Mide latencia de búsqueda con muestreo aleatorio simple y repeticiones.
 
-    Selecciona n_samples imágenes del query de forma aleatoria (seed fija),
-    las mide n_repeats veces cada una, y retorna media, mediana y p95.
+    Selecciona n_samples imágenes del query mediante muestreo aleatorio simple
+    sin reemplazo (seed fija, sin estratificar por especie), las mide
+    n_repeats veces cada una, y retorna media, mediana y p95.
 
     Args:
         query_embs: Embeddings query, shape (N, D).
@@ -444,14 +445,14 @@ def plot_distance_distributions(
             ax.set_visible(False)
 
         handles, labels = axes_flat[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="upper right", fontsize=13,
-                   bbox_to_anchor=(1.0, 0.98))
 
         fig.suptitle(
             f"Distribuciones de distancia intra vs inter-clase — {backbone}",
-            fontsize=18, fontweight="bold",
+            fontsize=18, fontweight="bold", y=0.99,
         )
-        fig.tight_layout()
+        fig.legend(handles, labels, loc="upper center", ncol=2, fontsize=13,
+                   frameon=False, bbox_to_anchor=(0.5, 0.93))
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
 
         fname = backbone.replace("/", "_").replace(" ", "_")
         for ext in ("svg", "png"):

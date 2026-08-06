@@ -1,0 +1,25 @@
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - 
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - ============================================================
+2026-06-17 01:09:07,008 - qualitative_validation - INFO -    VALIDACIÓN CUALITATIVA — PIPELINE FEW-SHOT FAUNA
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - ============================================================
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - Umbral U1 (DINOv2 Small, coseno p99)        : 0.7594
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - Umbral U2 (BioCLIP v2, centroide coseno p95): 0.1866
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - 
+2026-06-17 01:09:07,008 - qualitative_validation - INFO - Cargando índice del dataset...
+2026-06-17 01:09:07,071 - qualitative_validation - INFO -   4562 registros totales (gallery + query)
+2026-06-17 01:09:07,071 - qualitative_validation - INFO - 
+2026-06-17 01:09:07,071 - qualitative_validation - INFO - Cargando embeddings DINOv2 Small (gallery + query)...
+2026-06-17 01:09:47,303 - qualitative_validation - INFO -   Shape: (4562, 384)
+2026-06-17 01:09:47,330 - qualitative_validation - INFO - 
+2026-06-17 01:09:47,331 - qualitative_validation - INFO - Cargando embeddings BioCLIP v2 (gallery + query)...
+2026-06-17 01:09:56,378 - qualitative_validation - INFO -   Shape: (4562, 768)
+2026-06-17 01:09:56,379 - qualitative_validation - INFO - Computando centroides BioCLIP v2...
+2026-06-17 01:09:56,442 - qualitative_validation - INFO -   Centroides calculados para 91 especies.
+2026-06-17 01:09:56,442 - qualitative_validation - INFO - 
+2026-06-17 01:09:56,443 - qualitative_validation - INFO - Cargando modelos...
+2026-06-17 01:10:27,547 - qualitative_validation - INFO - 
+2026-06-17 01:10:27,554 - qualitative_validation - INFO - Procesando Carpeta A...
+2026-06-17 01:10:27,871 - qualitative_validation - INFO - Carpeta A (105EK113): 999 imágenes encontradas.
+2026-06-17 02:10:16,998 - qualitative_validation - INFO - 
+2026-06-17 02:28:10,561 - qualitative_validation - INFO - Procesando Carpeta B...
+2026-06-17 02:28:11,053 - qualitative_validation - INFO - Carpeta B (100RECNX): 714 imágenes encontradas.

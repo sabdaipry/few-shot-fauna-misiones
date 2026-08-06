@@ -232,7 +232,7 @@ def main():
     )
     logger.info(f"- Modelos a evaluar: {len(MODELS)}")
 
-    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR, test_split_value="query_dev")
 
     res_incremental = []
     res_outliers = []

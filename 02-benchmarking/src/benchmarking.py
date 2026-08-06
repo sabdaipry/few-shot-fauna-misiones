@@ -137,9 +137,37 @@ class ModelEvaluator:
     """
 
     def __init__(self, index_path, features_root_dir,
-                 output_dir=None):
+                 output_dir=None, test_split_value=None):
+        """
+        Args:
+            test_split_value: si es None (default), preserva el comportamiento
+                original: toda fila con split != 'gallery' se trata como test.
+                Si se pasa un valor (ej. 'query_dev'), solo las filas con ese
+                valor exacto de split se usan como test; cualquier otra fila
+                que no sea 'gallery' ni ese valor se ignora (ej. 'query_test'
+                queda fuera por completo, sin tocar el índice original).
+                Si el índice tiene más de un valor no-gallery (ej. 'query_dev'
+                y 'query_test' simultáneamente) y test_split_value es None,
+                se lanza ValueError en vez de mezclarlos silenciosamente.
+        """
         self.index_df = pd.read_csv(index_path)
         self.features_root = Path(features_root_dir)
+        self.test_split_value = test_split_value
+
+        if self.test_split_value is None:
+            non_gallery_splits = sorted(
+                self.index_df.loc[self.index_df['split'] != 'gallery', 'split'].unique().tolist()
+            )
+            if len(non_gallery_splits) > 1:
+                raise ValueError(
+                    f"la columna 'split' tiene más de un valor no-gallery "
+                    f"({non_gallery_splits}) y no se especificó test_split_value. "
+                    f"Especificá uno explícitamente:\n"
+                    f"  - 'query_dev'  -> selección de arquitectura/clasificador/umbrales, uso repetido\n"
+                    f"  - 'query_test' -> evaluación final congelada, una sola corrida, no volver a "
+                    f"usar para tomar decisiones de diseño"
+                )
+
         if output_dir is None:
             output_dir = Path(__file__).resolve().parent.parent / "data" / "results"
         self.output_dir = Path(output_dir)
@@ -212,10 +240,13 @@ class ModelEvaluator:
                     X_train.append(emb)
                     y_train.append(label)
                     idx_train.append(idx)
-                else:
+                elif self.test_split_value is None or row['split'] == self.test_split_value:
                     X_test.append(emb)
                     y_test.append(label)
                     idx_test.append(idx)
+                # else: fila que no es gallery ni el split de test seleccionado
+                # (ej. 'query_test' cuando test_split_value='query_dev') — se
+                # ignora por completo, no entra ni a train ni a test.
             else:
                 missing += 1
 
@@ -291,9 +322,14 @@ class ModelEvaluator:
             logger.warning(f"Error calculando Top-{k} Accuracy: {e}")
             return np.nan
     
-    def evaluate_model(self, model_name, force_rerun=False):
+    def evaluate_model(self, model_name, force_rerun=False, classifier_names=None):
         """
         Ejecuta la batería de clasificadores para un modelo de embeddings dado.
+
+        Args:
+            classifier_names: si es None (default), corre los 11 clasificadores
+                candidatos de siempre. Si se pasa una lista de nombres (ej.
+                para excluir las variantes Faiss), solo corre esos.
         """
         # 1. Definir todos los clasificadores candidatos
         candidate_classifiers = {
@@ -309,6 +345,11 @@ class ModelEvaluator:
             'Faiss KNN (k=5)': FaissKNNClassifier(k=5), # KNN rápido con FAISS
             'Faiss Nearest Centroid': FaissNearestCentroid() # Centroides con FAISS
         }
+
+        if classifier_names is not None:
+            candidate_classifiers = {
+                k: v for k, v in candidate_classifiers.items() if k in classifier_names
+            }
 
         # 2. Filtrado inteligente: Solo correr clasificadores no evaluados aún
         classifiers_to_run = {}

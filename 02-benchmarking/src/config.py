@@ -24,6 +24,7 @@ DATASET_INDEX_PATH = DATA_DIR / "dataset_index.csv"
 FEATURES_DIR = DATA_DIR / "features"
 BENCHMARK_RESULTS_DIR = DATA_DIR / "benchmark_results"
 REPORTS_DIR = DATA_DIR / "reports"
+FINAL_HOLDOUT_DIR = DATA_DIR / "final_holdout_evaluation"
 
 BACKBONES_TIMES_PATH = DATA_DIR / "backbones_times.csv"
 SCALABILITY_RESULTS_PATH = DATA_DIR / "scalability_results.csv"

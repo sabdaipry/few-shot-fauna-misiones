@@ -53,7 +53,7 @@ def main():
         logger.warning(f"No se encontró el archivo de tiempos de backbones en {BACKBONES_TIMES_PATH}. Los tiempos de backbone no serán considerados.")
 
     # Instanciar el evaluador
-    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR, test_split_value="query_dev")
     results = []
 
     # Barra Maestra (Modelos)

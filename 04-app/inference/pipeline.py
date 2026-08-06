@@ -29,6 +29,8 @@ import open_clip
 import pandas as pd
 import torch
 from PIL import Image
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import maximum_flow
 from sklearn.preprocessing import normalize
 
 # ---------------------------------------------------------------------------
@@ -497,6 +499,226 @@ class BioCLIPEmbedder:
         cam_np    = cam[1:].numpy()
         grid_size = int(round(len(cam_np) ** 0.5))
         mask_2d   = cam_np.reshape(grid_size, grid_size)
+
+        v_min, v_max = mask_2d.min(), mask_2d.max()
+        if v_max > v_min:
+            mask_2d = (mask_2d - v_min) / (v_max - v_min)
+        else:
+            mask_2d = np.zeros_like(mask_2d)
+
+        mask_img = Image.fromarray((mask_2d * 255).astype(np.uint8)).resize(
+            (W, H), Image.Resampling.BILINEAR
+        )
+        return np.array(mask_img).astype(np.float32) / 255.0
+
+    def get_gradcam_attention(self, pil_image: Image.Image, centroid: np.ndarray) -> np.ndarray:
+        """
+        Variante de Grad-CAM que pondera la atención del token [CLS] del último
+        bloque del ViT por el gradiente de esos pesos respecto a la similitud
+        coseno (embedding de la imagen vs. centroide), en lugar de ponderar
+        activaciones de canal como get_gradcam().
+
+        Parchea temporalmente el forward de nn.MultiheadAttention del último
+        resblock para pedir pesos de atención sin promediar por cabeza
+        (need_weights=True, average_attn_weights=False) y sin desprenderlos del
+        grafo de cómputo (retain_grad(), ya que no son tensores hoja). Tras el
+        backward, promedia los gradientes de esos pesos sobre las cabezas,
+        extrae la fila del token [CLS] (cuánto atiende CLS a cada token) tanto
+        de los pesos de atención como del gradiente promediado, y las combina
+        elemento a elemento (ponderación tipo Grad-CAM) seguido de ReLU.
+
+        Returns:
+            np.ndarray shape (H, W) float32, valores normalizados 0–1.
+        """
+        W, H = pil_image.size
+        block = self._model.visual.transformer.resblocks[-1]
+        mha   = block.attn
+
+        captured: list[torch.Tensor] = []
+        cls_fwd = type(mha).forward
+
+        def _patched(query, key, value, **kwargs):
+            kwargs.pop("need_weights", None)
+            kwargs.pop("average_attn_weights", None)
+            attn_out, weights = cls_fwd(
+                mha, query, key, value,
+                need_weights=True,
+                average_attn_weights=False,
+                **kwargs,
+            )
+            if weights is not None:
+                weights.retain_grad()
+                captured.append(weights)
+            return attn_out, weights
+
+        mha.forward = _patched
+
+        try:
+            with torch.enable_grad():
+                img_t = self._preprocess(pil_image).unsqueeze(0)
+                img_t.requires_grad_(True)
+
+                emb = self._model.encode_image(img_t)
+                emb = emb / emb.norm(dim=-1, keepdim=True)
+
+                centroid_t = torch.from_numpy(centroid).float().unsqueeze(0)
+                centroid_t = centroid_t / centroid_t.norm(dim=-1, keepdim=True)
+
+                score = (emb * centroid_t).sum()
+                self._model.zero_grad(set_to_none=True)
+                score.backward()
+        finally:
+            try:
+                del mha.forward
+            except AttributeError:
+                pass
+
+        if not captured or captured[0].grad is None:
+            return np.zeros((H, W), dtype=np.float32)
+
+        weights = captured[0].detach().squeeze(0)        # (num_heads, T, T)
+        grad    = captured[0].grad.detach().squeeze(0)   # (num_heads, T, T)
+
+        grad_avg    = grad.mean(dim=0)      # (T, T) — gradiente promediado sobre cabezas
+        weights_avg = weights.mean(dim=0)   # (T, T) — atención promediada sobre cabezas
+
+        cls_attn = weights_avg[0, :]   # (T,) fila CLS — cuánto atiende CLS a cada token
+        cls_grad = grad_avg[0, :]      # (T,) gradiente de esa fila respecto al score
+
+        cam = torch.relu(cls_grad * cls_attn)   # (T,)
+
+        # Excluir token [CLS] (índice 0), quedarse con tokens de parche
+        cam_np    = cam[1:].numpy()
+        grid_size = int(round(len(cam_np) ** 0.5))
+        mask_2d   = cam_np.reshape(grid_size, grid_size)
+
+        v_min, v_max = mask_2d.min(), mask_2d.max()
+        if v_max > v_min:
+            mask_2d = (mask_2d - v_min) / (v_max - v_min)
+        else:
+            mask_2d = np.zeros_like(mask_2d)
+
+        mask_img = Image.fromarray((mask_2d * 255).astype(np.uint8)).resize(
+            (W, H), Image.Resampling.BILINEAR
+        )
+        return np.array(mask_img).astype(np.float32) / 255.0
+
+    def get_attention_flow(self, pil_image: Image.Image) -> np.ndarray:
+        """
+        Calcula Attention Flow (Abnar & Zuidema, 2020) sobre el ViT completo.
+
+        Reutiliza el mecanismo de captura de get_attention_map(): sobrescribe
+        temporalmente el forward de cada nn.MultiheadAttention del ViT para
+        forzar need_weights=True, average_attn_weights=False, y guarda
+        weights.detach() de cada una de las 24 capas. No requiere gradientes
+        (a diferencia de get_gradcam()): opera solo sobre los valores de
+        atención del forward pass, igual que attention rollout.
+
+        A diferencia de attention rollout (que aproxima la composición de
+        capas con un producto de matrices), Attention Flow modela la red
+        como un grafo dirigido por capas: 25 capas de nodos (la entrada más
+        la salida de cada uno de los 24 bloques) × 257 tokens, con aristas
+        entre capas consecutivas cuya capacidad es la matriz de atención de
+        esa capa — con la misma augmentación residual 0.5·A+0.5·I y
+        normalización de fila que usa get_attention_map(), para representar
+        la conexión skip del bloque. Se computa el flujo máximo
+        (Edmonds-Karp, vía scipy.sparse.csgraph.maximum_flow) desde el
+        token [CLS] de la capa final hasta cada token de parche de la capa
+        de entrada; ese valor es la contribución de ese parche al embedding
+        final.
+
+        Nota de costo: implica un cómputo de flujo máximo independiente por
+        cada uno de los tokens de parche de entrada (256 para un grid
+        16×16), sobre un grafo de ~6400 nodos y ~1.6M aristas. En CPU esto
+        toma del orden de decenas de segundos.
+
+        Returns:
+            np.ndarray shape (H, W) float32, valores normalizados 0–1.
+        """
+        W, H = pil_image.size
+        resblocks = self._model.visual.transformer.resblocks
+        captured: list[torch.Tensor] = []
+        patched_mhas: list = []
+
+        def _make_patched_fwd(cls_fwd, mha_instance, storage):
+            def _patched(query, key, value, **kwargs):
+                kwargs.pop("need_weights", None)
+                kwargs.pop("average_attn_weights", None)
+                attn_out, weights = cls_fwd(
+                    mha_instance, query, key, value,
+                    need_weights=True,
+                    average_attn_weights=False,
+                    **kwargs,
+                )
+                if weights is not None:
+                    storage.append(weights.detach().cpu())
+                return attn_out, None
+            return _patched
+
+        for block in resblocks:
+            mha = block.attn
+            mha.forward = _make_patched_fwd(type(mha).forward, mha, captured)
+            patched_mhas.append(mha)
+
+        try:
+            img_t = self._preprocess(pil_image).unsqueeze(0)
+            with torch.no_grad():
+                self._model.encode_image(img_t)
+        finally:
+            for mha in patched_mhas:
+                try:
+                    del mha.forward
+                except AttributeError:
+                    pass
+
+        if not captured:
+            return np.zeros((H, W), dtype=np.float32)
+
+        num_layers      = len(captured)          # 24 bloques del ViT
+        seq_len         = captured[0].shape[-1]   # 257 (CLS + 256 parches)
+        num_node_layers = num_layers + 1          # 25 capas de nodos
+
+        # Matriz de capacidad por capa: promedio sobre cabezas, augmentación
+        # residual y normalización de fila — mismo tratamiento que rollout.
+        capacity_matrices: list[np.ndarray] = []
+        for attn in captured:
+            a = attn[0].float().mean(dim=0)          # promedio sobre cabezas → (seq, seq)
+            a = 0.5 * a + 0.5 * torch.eye(seq_len)
+            a = a / a.sum(dim=-1, keepdim=True)
+            capacity_matrices.append(a.numpy())
+
+        # Grafo disperso: nodo = capa_de_nodos * seq_len + token.
+        # Arco (capa l+1) -> (capa l) con capacidad = capacity_matrices[l].
+        # scipy.maximum_flow requiere capacidades enteras: se escalan.
+        SCALE   = 1_000_000
+        n_nodes = num_node_layers * seq_len
+
+        rows_list, cols_list, data_list = [], [], []
+        for l, cap in enumerate(capacity_matrices):
+            scaled    = np.round(cap * SCALE).astype(np.int64)
+            ii, jj    = np.nonzero(scaled)
+            src_layer = l + 1
+            dst_layer = l
+            rows_list.append(src_layer * seq_len + ii)
+            cols_list.append(dst_layer * seq_len + jj)
+            data_list.append(scaled[ii, jj])
+
+        rows  = np.concatenate(rows_list)
+        cols  = np.concatenate(cols_list)
+        data  = np.concatenate(data_list)
+        graph = csr_matrix((data, (rows, cols)), shape=(n_nodes, n_nodes))
+
+        source    = (num_node_layers - 1) * seq_len + 0   # [CLS] de la capa final
+        n_patches = seq_len - 1
+
+        flows = np.zeros(n_patches, dtype=np.float64)
+        for patch_idx in range(n_patches):
+            sink = 0 * seq_len + (patch_idx + 1)   # token de parche en la capa de entrada
+            result = maximum_flow(graph, source, sink)
+            flows[patch_idx] = float(result.flow_value)
+
+        grid_size = int(round(n_patches ** 0.5))
+        mask_2d   = flows.reshape(grid_size, grid_size)
 
         v_min, v_max = mask_2d.min(), mask_2d.max()
         if v_max > v_min:

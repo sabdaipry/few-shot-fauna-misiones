@@ -30,7 +30,7 @@ El proyecto está organizado en cuatro módulos secuenciales:
 
 ## 🏆 Resultados principales del benchmark
 
-Se evaluaron **19 backbones** de extracción de embeddings combinados con **7 clasificadores** clásicos, totalizando **133 combinaciones**. El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
+Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 clasificadores** (209 combinaciones totales; la comparación principal reportada es de **15 backbones × 7 clasificadores clásicos = 105 combinaciones**, excluyendo 4 variantes diagnósticas DINO `_gap` y 4 variantes Faiss — ver `02-benchmarking/CLAUDE.md`). El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
 
 ### Mejor combinación encontrada
 
@@ -43,6 +43,38 @@ Se evaluaron **19 backbones** de extracción de embeddings combinados con **7 cl
 | **F1-macro** | **80.30 %** |
 
 > Los intervalos de confianza se calcularon mediante *bootstrap* estratificado al 95 % (ver `02-benchmarking/scripts/07_bootstrap_ci.py`).
+
+> **Nota**: esta tabla es el benchmark exploratorio original, usado para *elegir* arquitectura y
+> clasificador — no es el número final a citar. El pipeline de producción usa BioCLIP v2 + Nearest
+> Centroid (no Linear SVM, por extensibilidad del catálogo sin reentrenar); su número final,
+> evaluado una sola vez sobre un conjunto nunca antes visto, está en la sección siguiente.
+
+---
+
+## 🧪 Metodología dev/test/holdout
+
+Desde julio de 2026, este proyecto separa el *query set* en dos partes para evitar sesgo de selección
+(*data snooping*): usar el mismo dato tanto para elegir un modelo como para reportar su accuracy final
+infla el número reportado, porque ese dato ya influyó en la elección.
+
+| Split | Tamaño | Uso |
+|---|---|---|
+| `gallery` | 888 imágenes | Catálogo de referencia (sin cambios) |
+| `query_dev` | 2572 imágenes (70 %) | Selección de arquitectura, clasificador y umbrales — de uso repetido |
+| `query_test` | 1102 imágenes (30 %) | Evaluación final **congelada** — se evalúa **una sola vez** |
+
+**Regla del proyecto de acá en adelante**: `query_test` no se vuelve a tocar salvo que se rehaga todo
+el proceso de selección desde cero. Ver la sección "Metodología dev/test/holdout" en `CLAUDE.md` para
+el detalle completo (regla de exclusión de especies singleton, ubicación de cada archivo, etc.).
+
+### Número final (evaluación held-out, una sola corrida)
+
+| Métrica | BioCLIP v2 + Nearest Centroid (pipeline de producción) |
+|---|---|
+| **Accuracy Top-1** | **89.20 %** (IC95: 87.66 % – 90.83 %) |
+| **F1-macro** | **85.38 %** (IC95: 82.55 % – 86.53 %) |
+
+Sobre 1102 imágenes / 87 especies de `query_test`, nunca antes usadas para ninguna decisión de diseño.
 
 ---
 

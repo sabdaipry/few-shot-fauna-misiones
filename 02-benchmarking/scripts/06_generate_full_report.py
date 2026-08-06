@@ -20,7 +20,7 @@ from src.utils.logger import setup_logger
 from src.config import (
     DATASET_INDEX_PATH, FEATURES_DIR, BENCHMARK_RESULTS_DIR, REPORTS_DIR,
     BACKBONES_TIMES_PATH, SCALABILITY_RESULTS_PATH,
-    INCREMENTAL_RESULTS_PATH, OUTLIER_RESULTS_PATH,
+    INCREMENTAL_RESULTS_PATH, OUTLIER_RESULTS_PATH, FINAL_HOLDOUT_DIR,
 )
 import src.visualization as viz
 import src.reporting as rep
@@ -102,16 +102,35 @@ def main():
                 stats['total_families'] = summary.get('total_families', 0)
                 stats['total_images'] = len(df_index)
         
-        # B. Desde dataset_index.csv (Split Query/Gallery)
+        # B. Desde dataset_index.csv (Split Gallery/Query_dev/Query_test)
         if 'split' in df_index.columns:
             counts = df_index['split'].value_counts()
-            stats['query_count'] = counts.get('query', 0)
+            # 'query' es el nombre legado (índice de 2 vías, previo a la separación
+            # dev/test); se mantiene como fallback para no romper si se corre sobre
+            # un índice viejo.
+            stats['query_count'] = counts.get('query_dev', counts.get('query', 0))
+            stats['query_test_count'] = counts.get('query_test', 0)
             stats['gallery_count'] = counts.get('gallery', 0)
             # Fallback si statistics.json falló
             if 'total_images' not in stats: stats['total_images'] = len(df_index)
-            if 'total_species' not in stats: 
+            if 'total_species' not in stats:
                 col = 'species' if 'species' in df_index.columns else 'class_name'
                 stats['total_species'] = df_index[col].nunique()
+
+        # C. Evaluación final held-out (query_test, una sola corrida) — opcional
+        data['holdout'] = None
+        if FINAL_HOLDOUT_DIR.exists():
+            try:
+                holdout = {
+                    'summary': pd.read_csv(FINAL_HOLDOUT_DIR / "benchmark_summary_test.csv"),
+                    'point_vs_bootstrap': pd.read_csv(FINAL_HOLDOUT_DIR / "bootstrap_ci_test_point_vs_bootstrap.csv"),
+                    'taxonomic_errors': pd.read_csv(FINAL_HOLDOUT_DIR / "taxonomic_error_breakdown_test.csv"),
+                }
+                threshold_path = FINAL_HOLDOUT_DIR / "threshold_validation_test.csv"
+                holdout['threshold_validation'] = pd.read_csv(threshold_path) if threshold_path.exists() else None
+                data['holdout'] = holdout
+            except FileNotFoundError as e:
+                logger.warning(f"final_holdout_evaluation/ incompleto, se omite la sección held-out: {e}")
 
 
     except Exception as e:
@@ -171,7 +190,7 @@ def main():
     tax_records = []  # Conteos crudos por backbone×clasificador, para 06_error_ranking
     ivc_records = []  # DataFrames Category/Correct/Incorrect por backbone×clasificador, para 07_ivc_ranking
 
-    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR)
+    evaluator = ModelEvaluator(DATASET_INDEX_PATH, FEATURES_DIR, test_split_value="query_dev")
     logging.getLogger("backbones").setLevel(logging.ERROR)
     
     pbar = tqdm(valid_backbones, desc="Procesando")

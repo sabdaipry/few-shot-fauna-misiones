@@ -1,0 +1,2 @@
+threshold_source,threshold_value,n_query_test_included,n_query_test_excluded_species,coverage,inter_contamination,separation_gap
+query_dev p95 centroide (congelado),0.1869273843674504,1093,9,0.9524245196706312,0.5791399817017383,-0.01222825987261636
