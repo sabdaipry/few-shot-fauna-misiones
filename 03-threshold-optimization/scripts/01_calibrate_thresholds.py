@@ -603,6 +603,13 @@ def plot_percentile_candidates_stats(
                 f"{val:.4f}",
                 ha="center", va=va, fontsize=12, fontweight="bold",
             )
+        # Margen extra arriba/abajo para que la etiqueta no se encime con el
+        # título del subplot (ni, si el valor es negativo, con el borde inferior).
+        top = max(row_data.max(), 0.0)
+        bottom = min(row_data.min(), 0.0)
+        rng = (top - bottom) or (abs(top) if top else 1.0)
+        pad = rng * 0.18
+        ax.set_ylim(bottom - (pad if row_data.min() < 0 else 0.0), top + pad)
         ax.set_title(metric_label, fontsize=14, fontweight="bold")
         ax.tick_params(axis="both", labelsize=12)
         ax.grid(axis="y", alpha=0.3)

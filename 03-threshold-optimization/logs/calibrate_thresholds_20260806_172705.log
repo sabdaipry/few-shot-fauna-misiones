@@ -1,0 +1,12 @@
+2026-08-06 17:27:13,248 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/01_intra_inter_distribution.{svg,png}
+2026-08-06 17:27:14,358 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/02_percentile_candidates_stats.{svg,png}
+2026-08-06 17:27:16,358 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/03_per_class_coverage.{svg,png}
+2026-08-06 17:27:19,846 - calibrate_thresholds - INFO - Figura guardada: dinov2_small/04_per_class_dmin_boxplots.{svg,png}
+2026-08-06 17:27:31,801 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/01_intra_inter_distribution.{svg,png}
+2026-08-06 17:27:34,006 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/02_percentile_candidates_stats_1nn.{svg,png}
+2026-08-06 17:27:35,511 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/02_percentile_candidates_stats_centroid.{svg,png}
+2026-08-06 17:27:38,163 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/03_per_class_coverage.{svg,png}
+2026-08-06 17:27:41,419 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/04_per_class_dmin_boxplots.{svg,png}
+2026-08-06 17:27:48,436 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/03_per_class_coverage_centroid.{svg,png}
+2026-08-06 17:27:55,010 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/04_per_class_dmin_boxplots_centroid.{svg,png}
+2026-08-06 17:27:58,442 - calibrate_thresholds - INFO - Figura guardada: bioclip_v2/05_1nn_vs_centroid_comparison.{svg,png}
