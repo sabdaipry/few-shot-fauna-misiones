@@ -131,9 +131,11 @@ def plot_leaderboard(df, metric="Accuracy", output_path="leaderboard.png"):
     plt.grid(axis='x', linestyle='--', alpha=0.7)
     plt.tick_params(labelsize=16)
 
-    # Etiquetas de valor
+    # Etiquetas de valor (si v es negativo, la etiqueta va a la izquierda de la punta de la barra)
     for i, v in enumerate(df_best[metric]):
-        ax.text(v + 0.005, i, f"{v:.4f}", va='center', fontsize=18, fontweight='bold')
+        ha = 'left' if v >= 0 else 'right'
+        offset = 0.005 if v >= 0 else -0.005
+        ax.text(v + offset, i, f"{v:.4f}", va='center', ha=ha, fontsize=18, fontweight='bold')
 
     _save_figure(output_path)
 
@@ -323,10 +325,13 @@ def plot_embedding_metrics(df, metrics=['Silhouette Score', 'Davies-Bouldin Inde
         plt.tick_params(labelsize=16)
 
         # Etiquetas de valor al final de cada barra (CH tiene escala mucho mayor: 2 decimales; SC/DBI: 4)
+        # Silhouette Score puede ser negativo: la etiqueta va a la izquierda de la punta en ese caso.
         value_fmt = "{:.2f}" if "Calinski" in met else "{:.4f}"
-        offset = df_sorted[met].max() * 0.02
+        offset_mag = df_sorted[met].abs().max() * 0.02
         for i, v in enumerate(df_sorted[met]):
-            ax.text(v + offset, i, value_fmt.format(v), va='center', fontsize=18, fontweight='bold')
+            ha = 'left' if v >= 0 else 'right'
+            offset = offset_mag if v >= 0 else -offset_mag
+            ax.text(v + offset, i, value_fmt.format(v), va='center', ha=ha, fontsize=18, fontweight='bold')
         ax.margins(x=0.15)  # espacio extra para que las etiquetas no se corten
 
         safe_name = met.replace(' ', '_').lower()
@@ -359,9 +364,11 @@ def plot_backbone_latency(df_time, output_path="latency_backbone.png"):
     plt.xlabel("Tiempo (ms)")
     plt.ylabel("")
 
-    # Anotar valores
+    # Anotar valores (si v es negativo, la etiqueta va a la izquierda de la punta de la barra)
     for i, v in enumerate(df_sorted["Backbone Time (ms)"]):
-        plt.text(v + 5, i, f"{v:.1f} ms", va='center', fontsize=11)
+        ha = 'left' if v >= 0 else 'right'
+        offset = 5 if v >= 0 else -5
+        plt.text(v + offset, i, f"{v:.1f} ms", va='center', ha=ha, fontsize=11)
 
     _save_figure(output_path)
 
@@ -393,8 +400,12 @@ def plot_classifier_latency(df_sum, output_path="latency_classifier.png"):
     plt.ylabel("")
     plt.xscale('log') # Logarítmico porque NearestCentroid es ms y SVM puede ser más
 
+    # Nota: escala log en X implica v > 0 siempre, pero se deja el chequeo de signo por
+    # consistencia con el resto de las gráficas de barras.
     for i, v in enumerate(df_sorted["Classifier Time (ms)"]):
-        plt.text(v * 1.1, i, f"{v:.4f} ms", va='center', fontsize=11)
+        ha = 'left' if v >= 0 else 'right'
+        factor = 1.1 if v >= 0 else 0.9
+        plt.text(v * factor, i, f"{v:.4f} ms", va='center', ha=ha, fontsize=11)
 
     _save_figure(output_path)
 
@@ -465,12 +476,14 @@ def plot_taxonomic_errors(error_counts, model_name, output_path):
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.tick_params(axis='x', labelsize=16)
 
-    # Etiquetas de valor
+    # Etiquetas de valor (si height es negativo, la etiqueta va debajo de la punta de la barra)
     for bar in bars:
         height = bar.get_height()
-        if height > 0:
-            plt.text(bar.get_x() + bar.get_width()/2., height + 1,
-                     f'{height:.1f}%', ha='center', va='bottom', fontweight='bold', fontsize=18)
+        if height != 0:
+            va = 'bottom' if height >= 0 else 'top'
+            offset = 1 if height >= 0 else -1
+            plt.text(bar.get_x() + bar.get_width()/2., height + offset,
+                     f'{height:.1f}%', ha='center', va=va, fontweight='bold', fontsize=18)
 
     _save_figure(output_path)
 

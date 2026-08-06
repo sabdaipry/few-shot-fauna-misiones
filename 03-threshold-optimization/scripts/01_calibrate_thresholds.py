@@ -592,12 +592,16 @@ def plot_percentile_candidates_stats(
     for ax, row_data, metric_label in zip(axes, data, labels):
         colors = [_PERCENTILE_COLORS[p] for p in PERCENTILES]
         bars = ax.bar(keys, row_data, color=colors, edgecolor="white", linewidth=0.8)
+        # separation_gap puede ser negativo: la etiqueta va debajo de la punta en ese caso.
+        offset_mag = np.abs(row_data).max() * 0.03
         for bar, val in zip(bars, row_data):
+            va = "bottom" if val >= 0 else "top"
+            offset = offset_mag if val >= 0 else -offset_mag
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + abs(row_data.max()) * 0.03,
+                bar.get_height() + offset,
                 f"{val:.4f}",
-                ha="center", va="bottom", fontsize=12, fontweight="bold",
+                ha="center", va=va, fontsize=12, fontweight="bold",
             )
         ax.set_title(metric_label, fontsize=14, fontweight="bold")
         ax.tick_params(axis="both", labelsize=12)

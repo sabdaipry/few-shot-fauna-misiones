@@ -313,12 +313,15 @@ def plot_accuracy_bar(results_df: pd.DataFrame, out_dir: Path) -> None:
         bars = ax.bar(x + offset, vals, width, label=backbone,
                       color=_BACKBONE_COLORS.get(backbone))
         for bar, v in zip(bars, vals):
+            va = "bottom" if v >= 0 else "top"
+            offset = 0.003 + abs(v) * 0.003
+            offset = offset if v >= 0 else -offset
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.003 + v * 0.003,
+                bar.get_height() + offset,
                 f"{v:.3f}",
                 ha="center",
-                va="bottom",
+                va=va,
                 fontsize=14,
                 fontweight="bold",
                 rotation=90,

@@ -1,0 +1,61 @@
+2026-08-06 17:05:06,713 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:05:06,713 - calibrate_thresholds_dev - INFO - ============================================================
+2026-08-06 17:05:06,713 - calibrate_thresholds_dev - INFO -    CALIBRACIÓN DE UMBRALES SOBRE query_dev
+2026-08-06 17:05:06,713 - calibrate_thresholds_dev - INFO - ============================================================
+2026-08-06 17:05:06,776 - calibrate_thresholds_dev - INFO - Índice dev/test cargado: 4562 registros
+2026-08-06 17:05:06,811 - calibrate_thresholds_dev - INFO - Clases incluidas: 82
+2026-08-06 17:05:06,811 - calibrate_thresholds_dev - INFO - Clases excluidas (gallery < 3): 9
+2026-08-06 17:05:06,813 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Axis axis  (gallery=2, query_dev=6)
+2026-08-06 17:05:06,814 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Cabassous tatouay  (gallery=2, query_dev=7)
+2026-08-06 17:05:06,814 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Conopophaga lineata vulgaris  (gallery=2, query_dev=1)
+2026-08-06 17:05:06,815 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Cryptopezus nattereri  (gallery=2, query_dev=3)
+2026-08-06 17:05:06,815 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Leopardus pardalis mitis  (gallery=1, query_dev=1)
+2026-08-06 17:05:06,816 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Puma concolor concolor  (gallery=2, query_dev=2)
+2026-08-06 17:05:06,817 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Strix virgata borelliana  (gallery=2, query_dev=1)
+2026-08-06 17:05:06,817 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Sus scrofa domesticus  (gallery=2, query_dev=5)
+2026-08-06 17:05:06,818 - calibrate_thresholds_dev - WARNING -   EXCLUIDA: Tapirus terrestris terrestris  (gallery=2, query_dev=1)
+2026-08-06 17:05:06,826 - calibrate_thresholds_dev - INFO - NPZ (dev) cargado: distance_distributions_dev.npz
+2026-08-06 17:05:06,837 - calibrate_thresholds_dev - INFO - Imágenes query_dev incluidas: 2545
+2026-08-06 17:05:06,837 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:05:06,837 - calibrate_thresholds_dev - INFO - --- UMBRAL 1: DINOv2 Small (coseno) — query_dev ---
+2026-08-06 17:06:19,644 - calibrate_thresholds_dev - INFO -   Gallery: (888, 384)  |  Query_dev: (2572, 384)
+2026-08-06 17:06:20,141 - calibrate_thresholds_dev - INFO -   Percentiles globales Umbral 1 (query_dev):
+2026-08-06 17:06:20,142 - calibrate_thresholds_dev - INFO -     p90: threshold=0.5467  coverage=0.8998  inter_contam=0.8358  gap=-0.0871
+2026-08-06 17:06:20,142 - calibrate_thresholds_dev - INFO -     p95: threshold=0.6166  coverage=0.9497  inter_contam=0.9438  gap=-0.1569
+2026-08-06 17:06:20,142 - calibrate_thresholds_dev - INFO -     p97: threshold=0.6722  coverage=0.9697  inter_contam=0.9741  gap=-0.2126
+2026-08-06 17:06:20,142 - calibrate_thresholds_dev - INFO -     p99: threshold=0.7535  coverage=0.9898  inter_contam=0.9937  gap=-0.2938
+2026-08-06 17:06:28,649 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:06:28,652 - calibrate_thresholds_dev - INFO - --- UMBRAL 2: BioCLIP v2 (coseno) — query_dev ---
+2026-08-06 17:07:52,505 - calibrate_thresholds_dev - INFO -   Gallery: (888, 768)  |  Query_dev: (2572, 768)
+2026-08-06 17:07:53,370 - calibrate_thresholds_dev - INFO -   Centroides calculados para 91 especies (a partir del gallery, sin cambios).
+2026-08-06 17:07:53,549 - calibrate_thresholds_dev - INFO -   Percentiles globales Umbral 2 — variante 1-NN (query_dev):
+2026-08-06 17:07:53,549 - calibrate_thresholds_dev - INFO -     p90: threshold=0.1646  coverage=0.8998  inter_contam=0.4350  gap=0.0106
+2026-08-06 17:07:53,549 - calibrate_thresholds_dev - INFO -     p95: threshold=0.1943  coverage=0.9497  inter_contam=0.6157  gap=-0.0192
+2026-08-06 17:07:53,549 - calibrate_thresholds_dev - INFO -     p97: threshold=0.2154  coverage=0.9697  inter_contam=0.7336  gap=-0.0403
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -     p99: threshold=0.2500  coverage=0.9898  inter_contam=0.9088  gap=-0.0749
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -   Percentiles globales Umbral 2 — variante centroide (query_dev):
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -     p90: threshold=0.1559  coverage=0.8998  inter_contam=0.3815  gap=0.0192
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -     p95: threshold=0.1869  coverage=0.9497  inter_contam=0.5721  gap=-0.0118
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -     p97: threshold=0.2045  coverage=0.9697  inter_contam=0.6747  gap=-0.0294
+2026-08-06 17:07:53,550 - calibrate_thresholds_dev - INFO -     p99: threshold=0.2561  coverage=0.9898  inter_contam=0.9273  gap=-0.0810
+2026-08-06 17:08:14,385 - calibrate_thresholds_dev - INFO - 
+thresholds_dev.json guardado: C:\Users\Win 10\Desktop\CEIA\CEIA\TF\few-shot-fauna-misiones\03-threshold-optimization\data\dev_test_split\thresholds_dev.json
+2026-08-06 17:08:14,385 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:08:14,385 - calibrate_thresholds_dev - INFO - === RESUMEN DE CALIBRACIÓN (query_dev) ===
+2026-08-06 17:08:14,386 - calibrate_thresholds_dev - INFO - Umbral       Variante            Percentil    Threshold   Coverage     Inter%        Gap
+2026-08-06 17:08:14,386 - calibrate_thresholds_dev - INFO - ----------------------------------------------------------------------------------------
+2026-08-06 17:08:14,386 - calibrate_thresholds_dev - INFO - Umbral 1     1-NN                      p90       0.5467     0.8998     0.8358    -0.0871
+2026-08-06 17:08:14,386 - calibrate_thresholds_dev - INFO - Umbral 1     1-NN                      p95       0.6166     0.9497     0.9438    -0.1569
+2026-08-06 17:08:14,386 - calibrate_thresholds_dev - INFO - Umbral 1     1-NN                      p97       0.6722     0.9697     0.9741    -0.2126
+2026-08-06 17:08:14,387 - calibrate_thresholds_dev - INFO - Umbral 1     1-NN                      p99       0.7535     0.9898     0.9937    -0.2938
+2026-08-06 17:08:14,387 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:08:14,387 - calibrate_thresholds_dev - INFO - Umbral 2     1-NN                      p90       0.1646     0.8998     0.4350     0.0106
+2026-08-06 17:08:14,387 - calibrate_thresholds_dev - INFO - Umbral 2     1-NN                      p95       0.1943     0.9497     0.6157    -0.0192
+2026-08-06 17:08:14,387 - calibrate_thresholds_dev - INFO - Umbral 2     1-NN                      p97       0.2154     0.9697     0.7336    -0.0403
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - Umbral 2     1-NN                      p99       0.2500     0.9898     0.9088    -0.0749
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - Umbral 2     Centroide                 p90       0.1559     0.8998     0.3815     0.0192
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - Umbral 2     Centroide                 p95       0.1869     0.9497     0.5721    -0.0118
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - Umbral 2     Centroide                 p97       0.2045     0.9697     0.6747    -0.0294
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - Umbral 2     Centroide                 p99       0.2561     0.9898     0.9273    -0.0810
+2026-08-06 17:08:14,388 - calibrate_thresholds_dev - INFO - 
+2026-08-06 17:08:14,389 - calibrate_thresholds_dev - INFO - CALIBRACIÓN SOBRE query_dev COMPLETADA
