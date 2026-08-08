@@ -21,16 +21,16 @@ El proyecto está organizado en cuatro módulos secuenciales:
 
 | Carpeta | Descripción | Estado |
 |---|---|---|
-| [`01-data-curation/`](01-data-curation/) | Herramienta de limpieza visual de datasets de imágenes (ver repositorio separado: [wildlife-image-dataset-curator](https://github.com/sabdaipry/wildlife-image-dataset-curator)) | N/A |
+| [`01-data-curation/`](01-data-curation/) | Herramienta de limpieza visual de datasets de imágenes (repositorio separado: [wildlife-image-dataset-curator](https://github.com/sabdaipry/wildlife-image-dataset-curator)) | ✅ **Completo** |
 | [`02-benchmarking/`](02-benchmarking/) | Benchmark comparativo de 19 backbones × 7 clasificadores para identificar la mejor combinación embedding + clasificador | ✅ **Completo** |
-| [`03-threshold-optimization/`](03-threshold-optimization/) | Calibración de umbrales del pipeline de clasificación en cascada | 🔧 **En desarrollo** (calibración matemática completa) |
-| [`04-app/`](04-app/) | Aplicación de escritorio (SAREKO) para investigadores | 🔧 **En desarrollo** (pipeline de inferencia y GUI implementados; pendiente pulido UI/UX y calibración de N/K/M) |
+| [`03-threshold-optimization/`](03-threshold-optimization/) | Calibración de umbrales del pipeline de clasificación en cascada | ✅ **Completo** |
+| [`04-app/`](04-app/) | Aplicación de escritorio (SAREKO) para investigadores | 🔧 **En desarrollo** (pipeline de inferencia y GUI de las tres pestañas ya funcionales; pendiente calibrar N/K/M con video real y pulir UI/UX) |
 
 ---
 
 ## 🏆 Resultados principales del benchmark
 
-Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 clasificadores** (209 combinaciones totales; la comparación principal reportada es de **15 backbones × 7 clasificadores clásicos = 105 combinaciones**, excluyendo 4 variantes diagnósticas DINO `_gap` y 4 variantes Faiss, ver `02-benchmarking/CLAUDE.md`). El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
+Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 clasificadores** (209 combinaciones totales; la comparación principal reportada es de **15 backbones × 7 clasificadores clásicos = 105 combinaciones**, excluyendo 4 variantes diagnósticas DINO `_gap` y 4 variantes Faiss). El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
 
 ### Mejor combinación encontrada
 
@@ -64,8 +64,7 @@ infla el número reportado, porque ese dato ya influyó en la elección.
 | `query_test` | 1102 imágenes (30 %) | Evaluación final **congelada**, se evalúa **una sola vez** |
 
 **Regla del proyecto de acá en adelante**: `query_test` no se vuelve a tocar salvo que se rehaga todo
-el proceso de selección desde cero. Ver la sección "Metodología dev/test/holdout" en `CLAUDE.md` para
-el detalle completo (regla de exclusión de especies singleton, ubicación de cada archivo, etc.).
+el proceso de selección desde cero.
 
 ### Número final (evaluación held-out, una sola corrida)
 

@@ -2,7 +2,7 @@
 
 ## Qué hace esta fase
 
-Calibra el umbral de confianza que decide, en el pipeline en cascada, cuándo una predicción de BioCLIP v2 se acepta directamente y cuándo pasa al árbitro KNN por baja confianza. La calibración matemática está completa; queda pendiente cerrar formalmente el módulo.
+Calibra el umbral de confianza que decide, en el pipeline en cascada, cuándo una predicción de BioCLIP v2 se acepta directamente y cuándo pasa al árbitro KNN por baja confianza. Módulo completo: el umbral está calibrado, validado sobre `query_test` y validado cualitativamente sobre fotogramas reales de cámara trampa.
 
 **Qué produce:**
 
@@ -18,10 +18,11 @@ Calibra el umbral de confianza que decide, en el pipeline en cascada, cuándo un
 | Modelo | BioCLIP v2 |
 | Métrica | Distancia coseno al centroide de la especie predicha |
 | Cómputo del centroide | Media de embeddings L2-normalizados del gallery, re-normalizada |
-| Umbral seleccionado | **0.1866** (percentil 95 de la distribución intraclase) |
-| Cobertura a ese umbral | 95 % |
+| Umbral seleccionado | **0.1869** (percentil 95 de la distribución intraclase, calibrado sobre `query_dev`) |
+| Cobertura a ese umbral | 94.97 % (query_dev) · 95.24 % (validado sobre `query_test` congelado) |
+| Contaminación interclase | 57.21 % (query_dev) · 57.91 % (validado sobre `query_test` congelado) |
 
-Se calibró también un umbral para DINOv2 Small (etapa de rechazo de fotogramas vacíos), pero **se eliminó del pipeline definitivo**: en validación cualitativa con fotogramas reales, la tasa de rechazo fue 0 % (distancias en rango 0.41–0.56, muy por debajo del umbral calibrado de 0.7594), no hay separabilidad real entre fauna y ausencia de fauna con ese modelo. Ver `CLAUDE.md` de este módulo y el de la raíz para el detalle completo.
+Se calibró también un umbral para DINOv2 Small (etapa de rechazo de fotogramas vacíos), pero **se eliminó del pipeline definitivo**: en validación cualitativa con fotogramas reales, la tasa de rechazo fue 0 % (distancias en rango 0.41–0.56, muy por debajo del umbral calibrado de 0.7594), no hay separabilidad real entre fauna y ausencia de fauna con ese modelo.
 
 9 especies quedan excluidas del cómputo de percentiles por tener menos de 3 imágenes en el gallery (soporte insuficiente).
 
@@ -43,7 +44,7 @@ Se calibró también un umbral para DINOv2 Small (etapa de rechazo de fotogramas
 
 ### `dev_test_split/01_calibrate_thresholds_dev.py`
 
-- **Qué hace:** misma calibración que `01_calibrate_thresholds.py`, pero restringida a `query_dev`. Es la versión que efectivamente se usa desde que el proyecto separó el query set (ver metodología dev/test/holdout en el `CLAUDE.md` raíz). El umbral final (0.1866) y su validación sobre `query_test` no cambiaron con el recalibrado.
+- **Qué hace:** misma calibración que `01_calibrate_thresholds.py`, pero restringida a `query_dev`. Es la versión que efectivamente se usa desde que el proyecto separó el query set (ver metodología dev/test/holdout en el README raíz). El umbral resultante (0.1869) es prácticamente igual al calibrado originalmente sobre el query set completo (0.18663, diferencia de 0.0003, dentro del ruido); `thresholds.json` (nombre canónico) se regeneró con este valor.
 - **Output:** `data/dev_test_split/thresholds_dev.json`, figuras en `data/reports_dev/figures/`.
 
 La validación congelada del umbral sobre `query_test` no tiene script propio en este módulo, se calculó junto con la evaluación final del clasificador en `02-benchmarking/scripts/dev_test_split/05_final_eval_test.py` (ver `data/final_holdout_evaluation/README.md`).
@@ -60,8 +61,8 @@ La validación congelada del umbral sobre `query_test` no tiene script propio en
 │   └── dev_test_split/
 │       └── 01_calibrate_thresholds_dev.py
 ├── data/
-│   ├── thresholds.json                  # Umbral calibrado (query set completo, referencia histórica)
-│   ├── dev_test_split/thresholds_dev.json  # Umbral vigente, calibrado sobre query_dev
+│   ├── thresholds.json                  # Umbral vigente (nombre canónico, calculado sobre query_dev)
+│   ├── dev_test_split/thresholds_dev.json  # Misma calibración, generada por el script de dev_test_split
 │   ├── resultados_validacion.csv        # Salida de la validación cualitativa
 │   ├── reports/ , reports_dev/          # Figuras (distribuciones, cobertura por clase, boxplots)
 │   └── final_holdout_evaluation/        # Puntero a la validación congelada (vive en 02-benchmarking)

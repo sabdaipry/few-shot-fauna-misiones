@@ -12,10 +12,11 @@ En desarrollo activo. Ya están implementados:
 
 - **Pipeline de inferencia completo** (`inference/pipeline.py`): filtro de movimiento (MOG2) como pre-filtro antes de invocar el backbone, extracción de embeddings con BioCLIP v2 (`open_clip`), clasificación por centroide con árbitro KNN para los casos de baja confianza, y consenso temporal por ventana deslizante (`SlidingWindowConsensus`) sobre los frames de video.
 - **GUI con las tres pestañas** especificadas (Análisis / Validación / Evaluación), ver `src/gui/tabs/`.
-- **Persistencia de sesión** (`src/data/session.py`) para retomar análisis sin reprocesar.
+- **Persistencia de sesión con restauración automática** (`src/data/session.py`): la app recarga sola el último análisis al abrirse, sin necesidad de una acción manual de "cargar reporte", y mantiene un historial de corridas.
+- **Explicabilidad visual** (Attention Rollout y GradCAM sobre BioCLIP v2) para inspeccionar en qué región de la imagen se apoyó el modelo, disponible en el panel de detalle de la pestaña Validación.
 - **Procesamiento en segundo plano** con `QThread` (`src/workers/`), sin bloquear la GUI.
 
-Pendiente: pulido de UI/UX, modo evaluación/debug para calibrar `K`/`M`/`N` en condiciones reales, y la funcionalidad "Cargar último reporte" desde la pantalla de inicio. Ver `CLAUDE.md` de este módulo para el detalle de problemas abiertos (fauna múltiple en un mismo frame, sin resolver).
+Pendiente: calibración de `N`/`K`/`M` con videos reales de cámara trampa, una herramienta de evaluación contra ground truth etiquetado, y pulido de UI/UX. La detección automática de múltiples especies en un mismo frame sigue sin resolverse (hay marcado manual y herramientas de explicabilidad para apoyar la revisión humana, pero no segmentación automática).
 
 ## Cómo ejecutar
 
@@ -38,7 +39,7 @@ Requiere el entorno virtual de la raíz del repo (`../.venv`) con `PySide6`, `to
 ├── src/
 │   ├── gui/
 │   │   ├── main_window.py     # Ventana principal, navbar, orquestación de pestañas
-│   │   ├── styles.py          # Hoja de estilos Qt (paleta SAREKO, ver CLAUDE.md)
+│   │   ├── styles.py          # Hoja de estilos Qt (paleta SAREKO)
 │   │   └── tabs/               # analisis_tab.py, validacion_tab.py, evaluacion_tab.py
 │   ├── workers/                # QThread: processing_worker.py, analysis_worker.py
 │   └── data/
@@ -53,7 +54,7 @@ Todos los parámetros del pipeline están externalizados, no hardcodeados:
 
 | Clave | Valor por defecto | Descripción |
 |---|---|---|
-| `confidence_threshold` | `0.1866` | Umbral de confianza calibrado en `03-threshold-optimization` (distancia coseno al centroide, percentil 95) |
+| `confidence_threshold` | `0.1866` | Umbral de confianza (distancia coseno al centroide, percentil 95). **Desactualizado**: el umbral vigente recalibrado sobre `query_dev` y validado sobre `query_test` en `03-threshold-optimization` es `0.1869` (diferencia de 0.0003); este archivo no se actualizó después del recalibrado. |
 | `rejection_threshold` | `0.25` | Distancia por encima de la cual se rechaza la predicción del árbitro KNN |
 | `knn_k` | `5` | Vecinos considerados por el árbitro KNN |
 | `default_N` | `30` | Submuestreo temporal: 1 frame cada N |
@@ -62,7 +63,7 @@ Todos los parámetros del pipeline están externalizados, no hardcodeados:
 | `sliding_close_quorum_P` | `3` | Quórum para especies "cercanas" en el consenso deslizante |
 | `debug_mode` | `false` | Habilita logging detallado a `data/sareko_debug.log` |
 
-`N`, `K` y `M` son los parámetros que todavía están pendientes de calibración final con videos reales de cámara trampa (ver `CLAUDE.md` raíz, sección "Parámetros a calibrar").
+`N`, `K` y `M` son los parámetros que todavía están pendientes de calibración final con videos reales de cámara trampa.
 
 ## Catálogo de referencia
 
