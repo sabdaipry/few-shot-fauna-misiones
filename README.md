@@ -24,7 +24,7 @@ El proyecto está organizado en cuatro módulos secuenciales:
 | [`01-data-curation/`](01-data-curation/) | Herramienta de limpieza visual de datasets de imágenes (repositorio separado: [wildlife-image-dataset-curator](https://github.com/sabdaipry/wildlife-image-dataset-curator)) | ✅ **Completo** |
 | [`02-benchmarking/`](02-benchmarking/) | Benchmark comparativo de 19 backbones × 7 clasificadores para identificar la mejor combinación embedding + clasificador | ✅ **Completo** |
 | [`03-threshold-optimization/`](03-threshold-optimization/) | Calibración de umbrales del pipeline de clasificación en cascada | ✅ **Completo** |
-| [`04-app/`](04-app/) | Aplicación de escritorio (SAREKO) para investigadores | 🔧 **En desarrollo** (pipeline de inferencia y GUI de las tres pestañas ya funcionales; pendiente calibrar N/K/M con video real y pulir UI/UX) |
+| [`04-app/`](04-app/) | Aplicación de escritorio (SAREKO) para investigadores | 🔧 **En desarrollo** (pipeline de inferencia y GUI de las tres pestañas ya funcionales; pendiente una herramienta de evaluación contra ground truth y pulido de UI/UX) |
 
 ---
 
@@ -53,9 +53,9 @@ Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 c
 
 ## 🧪 Metodología dev/test/holdout
 
-Desde julio de 2026, este proyecto separa el *query set* en dos partes para evitar sesgo de selección
-(*data snooping*): usar el mismo dato tanto para elegir un modelo como para reportar su accuracy final
-infla el número reportado, porque ese dato ya influyó en la elección.
+Este proyecto separa el *query set* en dos partes para evitar sesgo de selección (*data snooping*):
+usar el mismo dato tanto para elegir un modelo como para reportar su accuracy final infla el número
+reportado, porque ese dato ya influyó en la elección.
 
 | Split | Tamaño | Uso |
 |---|---|---|
