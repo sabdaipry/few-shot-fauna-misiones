@@ -1,5 +1,0 @@
-2026-07-24 17:24:49,375 - calibrate_thresholds_dev - INFO - 
-2026-07-24 17:24:49,376 - calibrate_thresholds_dev - INFO - ============================================================
-2026-07-24 17:24:49,376 - calibrate_thresholds_dev - INFO -    CALIBRACIÓN DE UMBRALES SOBRE query_dev
-2026-07-24 17:24:49,376 - calibrate_thresholds_dev - INFO - ============================================================
-2026-07-24 17:24:49,376 - calibrate_thresholds_dev - ERROR - No existe C:\Users\Win 10\Desktop\CEIA\CEIA\TF\few-shot-fauna-misiones\02-benchmarking\data\dev_test_split\dataset_index_dev_test_split.csv. Correr antes scripts/dev_test_split/01_generate_dev_test_index.py (en 02-benchmarking).

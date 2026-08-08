@@ -210,7 +210,7 @@ def generate_index():
                         species_groups[final_species_name] = []
                     
                     species_groups[final_species_name].append({
-                        'filepath': str(img_path),
+                        'filepath': str(img_path.relative_to(project_root)),
                         'family': family,
                         'genus': genus,
                         'species': final_species_name,
