@@ -54,7 +54,7 @@ Todos los parámetros del pipeline están externalizados, no hardcodeados:
 
 | Clave | Valor por defecto | Descripción |
 |---|---|---|
-| `confidence_threshold` | `0.1866` | Umbral de confianza (distancia coseno al centroide, percentil 95). **Desactualizado**: el umbral vigente recalibrado sobre `query_dev` y validado sobre `query_test` en `03-threshold-optimization` es `0.1869` (diferencia de 0.0003); este archivo no se actualizó después del recalibrado. |
+| `confidence_threshold` | `0.1869` | Umbral de confianza (distancia coseno al centroide, percentil 95), calibrado sobre `query_dev` y validado sobre `query_test` en `03-threshold-optimization` |
 | `rejection_threshold` | `0.25` | Distancia por encima de la cual se rechaza la predicción del árbitro KNN |
 | `knn_k` | `5` | Vecinos considerados por el árbitro KNN |
 | `default_N` | `30` | Submuestreo temporal: 1 frame cada N |
