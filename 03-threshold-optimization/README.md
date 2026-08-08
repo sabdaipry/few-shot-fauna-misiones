@@ -76,6 +76,12 @@ La validación congelada del umbral sobre `query_test` no tiene script propio en
 ```bash
 cd 03-threshold-optimization
 
+# Instalar PyTorch (build CPU) desde su índice propio
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Instalar el resto de dependencias sin reinstalar torch
+pip install -r requirements.txt --ignore-installed torch
+
 # Calibración vigente (sobre query_dev)
 python scripts/dev_test_split/01_calibrate_thresholds_dev.py
 
@@ -83,4 +89,4 @@ python scripts/dev_test_split/01_calibrate_thresholds_dev.py
 python scripts/02_qualitative_validation.py
 ```
 
-Requiere los embeddings de `02-benchmarking/data/features/` ya extraídos (ver `02-benchmarking/README.md`).
+Usa el entorno virtual de la raíz del repo (`../.venv`), compartido con `02-benchmarking`. Requiere además los embeddings de `02-benchmarking/data/features/` ya extraídos (ver `02-benchmarking/README.md`).

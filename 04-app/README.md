@@ -26,10 +26,17 @@ Pendiente: calibrar los umbrales del filtro de movimiento MOG2 (`motion_filter_*
 
 ```bash
 cd 04-app
+
+# Instalar PyTorch (build CPU) desde su índice propio
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Instalar el resto de dependencias sin reinstalar torch
+pip install -r requirements.txt --ignore-installed torch
+
 python main.py
 ```
 
-Requiere el entorno virtual de la raíz del repo (`../.venv`) con `PySide6`, `torch` (build CPU), `open_clip`, `opencv-python`, `scikit-learn`, `scipy`, `pandas`, `numpy` y `Pillow` instalados. Todavía no hay un `requirements.txt` propio de este módulo; las dependencias se instalan junto con las de `02-benchmarking`.
+Usa el entorno virtual de la raíz del repo (`../.venv`), compartido con `02-benchmarking`.
 
 ## Estructura de carpetas
 

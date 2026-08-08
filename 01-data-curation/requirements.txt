@@ -1,0 +1,14 @@
+# Copia de referencia. El código y el requirements.txt reales viven en el
+# repositorio separado: https://github.com/sabdaipry/wildlife-image-dataset-curator
+PySide6
+torch
+torchvision
+Pillow
+numpy
+pandas
+umap-learn
+matplotlib
+tqdm
+
+# Dependencia de desarrollo
+pytest
