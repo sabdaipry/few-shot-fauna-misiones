@@ -1,4 +1,4 @@
-# 02-benchmarking — Benchmark de backbones y clasificadores few-shot
+# 02-benchmarking: Benchmark de backbones y clasificadores few-shot
 
 ## Qué hace esta fase
 
@@ -10,7 +10,7 @@ El pipeline parte de un dataset de imágenes organizado taxonómicamente, extrae
 
 - Un índice del dataset (`dataset_index.csv`) con split galería/query por especie e IVC integrado.
 - Embeddings precalculados por backbone (`data/features/`).
-- Una tabla comparativa de métricas para las 209 combinaciones backbone × clasificador (19×11, incluyendo variantes DINO `_gap` y Faiss; la comparación principal reportada es 15×7=105 — ver `CLAUDE.md` de este módulo) (`benchmark_summary.csv`).
+- Una tabla comparativa de métricas para las 209 combinaciones backbone × clasificador (19×11, incluyendo variantes DINO `_gap` y Faiss; la comparación principal reportada es 15×7=105, ver `CLAUDE.md` de este módulo) (`benchmark_summary.csv`).
 - Intervalos de confianza bootstrap al 95% estratificados por clase (`bootstrap_ci.csv`).
 - Mediciones de latencia, escalabilidad y comportamiento ante datos nuevos (incremental / outliers).
 - Un reporte HTML final con leaderboards, heatmaps, UMAPs, matrices de confusión y análisis por clase taxonómica.
@@ -50,8 +50,8 @@ pip install -r requirements.txt --ignore-installed torch
 │   └── helpers/          # Scripts auxiliares de mantenimiento
 ├── data/                 # Datos de entrada, intermedios y resultados
 │   ├── benchmark_results/    # CSVs de salida del benchmark (summary, predicciones, bootstrap CI)
-│   ├── features/             # Embeddings por backbone (.npy) — no versionados, ver nota abajo
-│   ├── fauna_seleccionada_bosque_atlantico/  # Imágenes del dataset y metadatos — no versionado
+│   ├── features/             # Embeddings por backbone (.npy), no versionados, ver nota abajo
+│   ├── fauna_seleccionada_bosque_atlantico/  # Imágenes del dataset y metadatos, no versionado
 │   ├── reports/               # Reporte HTML final + figuras generadas
 │   │   └── figures/           # PNG/SVG de cada gráfico del reporte
 │   └── results/               # Resultados intermedios de pruebas puntuales
@@ -77,7 +77,7 @@ Los scripts se ejecutan en orden, ya que cada uno consume el output del anterior
 
 - **Qué hace:** escanea recursivamente las imágenes del dataset, integra los puntajes del Índice de Valor de Conservación (IVC) y asigna un split galería/query por especie.
 - **Input:** imágenes en `data/fauna_seleccionada_bosque_atlantico/images/`, `data/Indice_Valor_Conservacion_Misiones.csv`, `data/manual_fixes.yaml`.
-- **Output:** `data/dataset_index.csv` — índice maestro con una fila por imagen (especie, familia, IVC, split galería/query).
+- **Output:** `data/dataset_index.csv`, índice maestro con una fila por imagen (especie, familia, IVC, split galería/query).
 
 ### `02_extract_features.py`
 
@@ -135,6 +135,33 @@ python scripts/07_bootstrap_ci.py --iterations 1000 --seed 29 --confidence 0.95
 
 ---
 
+## Split dev/test del query set
+
+Desde julio de 2026 el *query set* se separa en `query_dev` (70 %, selección de arquitectura y
+umbrales) y `query_test` (30 %, evaluación final congelada, se toca una sola vez), ver la
+metodología completa en el `CLAUDE.md` de la raíz. Los scripts de `scripts/dev_test_split/`
+reproducen ese flujo por separado del pipeline original (que sigue intacto y funcionando igual
+que antes):
+
+```
+scripts/dev_test_split/
+├── 01_generate_dev_test_index.py  # Genera dataset_index_dev_test_split.csv (columna split: gallery/query_dev/query_test)
+├── 02_run_benchmark_dev.py        # Benchmark de clasificadores sobre query_dev
+├── 03_distance_benchmark_dev.py   # Benchmark de métricas de distancia sobre query_dev
+├── 04_bootstrap_ci_dev.py         # Bootstrap CI sobre query_dev
+├── 05_final_eval_test.py          # Evaluación final, una sola corrida, sobre query_test
+└── 06_bootstrap_ci_test.py        # Bootstrap CI de la evaluación final sobre query_test
+```
+
+**Resultados**, para no mezclarlos con los del query set completo original:
+
+| Qué | Dónde |
+|---|---|
+| Resultados sobre `query_dev` (reusables) | `data/benchmark_results_dev/`, `data/reports_dev/` |
+| Evaluación final congelada sobre `query_test` (no volver a correr) | `data/final_holdout_evaluation/` |
+
+---
+
 ## Módulos reutilizables (`src/`)
 
 | Módulo | Responsabilidad |
@@ -173,7 +200,7 @@ python scripts/07_bootstrap_ci.py --iterations 1000 --seed 29 --confidence 0.95
 
 Por su tamaño, los siguientes directorios **se excluyen del control de versiones** (ver `.gitignore`):
 
-- `data/features/` — embeddings extraídos por backbone (`.npy`).
-- `data/fauna_seleccionada_bosque_atlantico/` — imágenes originales del dataset y sus metadatos.
+- `data/features/`: embeddings extraídos por backbone (`.npy`).
+- `data/fauna_seleccionada_bosque_atlantico/`: imágenes originales del dataset y sus metadatos.
 
 Ambos son completamente **reproducibles** ejecutando el pipeline desde cero (`01_generate_index.py` → `02_extract_features.py`) sobre el dataset fuente de iNaturalist descripto en el README de la raíz del repositorio.

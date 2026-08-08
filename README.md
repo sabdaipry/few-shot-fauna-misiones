@@ -7,9 +7,9 @@
 
 ## 📋 Descripción del proyecto
 
-El monitoreo de fauna silvestre mediante cámaras trampa es una herramienta fundamental para la conservación de ecosistemas, pero genera un **cuello de botella crítico**: el volumen de videos e imágenes capturados crece mucho más rápido que la capacidad humana para analizarlos. El análisis manual es lento, tedioso y propenso a errores —especialmente con especies pequeñas, nocturnas o parcialmente ocultas—, lo que retrasa la disponibilidad de información para la toma de decisiones de conservación.
+El monitoreo de fauna silvestre mediante cámaras trampa es una herramienta fundamental para la conservación de ecosistemas, pero genera un **cuello de botella crítico**: el volumen de videos e imágenes capturados crece mucho más rápido que la capacidad humana para analizarlos. El análisis manual es lento, tedioso y propenso a errores (especialmente con especies pequeñas, nocturnas o parcialmente ocultas), lo que retrasa la disponibilidad de información para la toma de decisiones de conservación.
 
-Este proyecto busca automatizar dicho análisis en el contexto específico de la **Selva Paranaense**, en la provincia de Misiones, Argentina —uno de los ecosistemas con mayor biodiversidad y mayor presión de conservación de Sudamérica, parte del Bosque Atlántico del Alto Paraná—.
+Este proyecto busca automatizar dicho análisis en el contexto específico de la **Selva Paranaense**, en la provincia de Misiones, Argentina, uno de los ecosistemas con mayor biodiversidad y mayor presión de conservación de Sudamérica, parte del Bosque Atlántico del Alto Paraná.
 
 A diferencia de los enfoques clásicos de visión artificial, que requieren grandes datasets etiquetados por especie para entrenar un clasificador desde cero, aquí se adopta un enfoque de **few-shot learning basado en modelos fundacionales** (*foundation models*): se aprovechan embeddings ya entrenados sobre grandes corpus de imágenes (incluyendo modelos especializados en biología) y se entrena únicamente un clasificador liviano sobre esos embeddings. Esto permite obtener buen desempeño de clasificación **con relativamente pocas imágenes por especie**, sin necesidad de infraestructura de entrenamiento pesada ni de re-entrenar redes profundas completas.
 
@@ -21,16 +21,16 @@ El proyecto está organizado en cuatro módulos secuenciales:
 
 | Carpeta | Descripción | Estado |
 |---|---|---|
-| [`01-data-curation/`](01-data-curation/) | Herramienta de limpieza visual de datasets de imágenes (ver repositorio separado: [wildlife-image-dataset-curator](https://github.com/sabdaipry/wildlife-image-dataset-curator)) | — |
+| [`01-data-curation/`](01-data-curation/) | Herramienta de limpieza visual de datasets de imágenes (ver repositorio separado: [wildlife-image-dataset-curator](https://github.com/sabdaipry/wildlife-image-dataset-curator)) | N/A |
 | [`02-benchmarking/`](02-benchmarking/) | Benchmark comparativo de 19 backbones × 7 clasificadores para identificar la mejor combinación embedding + clasificador | ✅ **Completo** |
-| [`03-threshold-optimization/`](03-threshold-optimization/) | Calibración de umbrales del pipeline de clasificación en cascada | 🔧 **En desarrollo** |
-| [`04-app/`](04-app/) | Aplicación de escritorio final para investigadores | 🔜 **Próximamente** |
+| [`03-threshold-optimization/`](03-threshold-optimization/) | Calibración de umbrales del pipeline de clasificación en cascada | 🔧 **En desarrollo** (calibración matemática completa) |
+| [`04-app/`](04-app/) | Aplicación de escritorio (SAREKO) para investigadores | 🔧 **En desarrollo** (pipeline de inferencia y GUI implementados; pendiente pulido UI/UX y calibración de N/K/M) |
 
 ---
 
 ## 🏆 Resultados principales del benchmark
 
-Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 clasificadores** (209 combinaciones totales; la comparación principal reportada es de **15 backbones × 7 clasificadores clásicos = 105 combinaciones**, excluyendo 4 variantes diagnósticas DINO `_gap` y 4 variantes Faiss — ver `02-benchmarking/CLAUDE.md`). El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
+Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 clasificadores** (209 combinaciones totales; la comparación principal reportada es de **15 backbones × 7 clasificadores clásicos = 105 combinaciones**, excluyendo 4 variantes diagnósticas DINO `_gap` y 4 variantes Faiss, ver `02-benchmarking/CLAUDE.md`). El sistema completo opera **de forma local, sin GPU y sin servidores externos**, lo que lo hace viable para investigadores en campo con conectividad limitada.
 
 ### Mejor combinación encontrada
 
@@ -45,7 +45,7 @@ Se evaluaron **19 backbones** de extracción de embeddings combinados con **11 c
 > Los intervalos de confianza se calcularon mediante *bootstrap* estratificado al 95 % (ver `02-benchmarking/scripts/07_bootstrap_ci.py`).
 
 > **Nota**: esta tabla es el benchmark exploratorio original, usado para *elegir* arquitectura y
-> clasificador — no es el número final a citar. El pipeline de producción usa BioCLIP v2 + Nearest
+> clasificador, no es el número final a citar. El pipeline de producción usa BioCLIP v2 + Nearest
 > Centroid (no Linear SVM, por extensibilidad del catálogo sin reentrenar); su número final,
 > evaluado una sola vez sobre un conjunto nunca antes visto, está en la sección siguiente.
 
@@ -60,8 +60,8 @@ infla el número reportado, porque ese dato ya influyó en la elección.
 | Split | Tamaño | Uso |
 |---|---|---|
 | `gallery` | 888 imágenes | Catálogo de referencia (sin cambios) |
-| `query_dev` | 2572 imágenes (70 %) | Selección de arquitectura, clasificador y umbrales — de uso repetido |
-| `query_test` | 1102 imágenes (30 %) | Evaluación final **congelada** — se evalúa **una sola vez** |
+| `query_dev` | 2572 imágenes (70 %) | Selección de arquitectura, clasificador y umbrales, de uso repetido |
+| `query_test` | 1102 imágenes (30 %) | Evaluación final **congelada**, se evalúa **una sola vez** |
 
 **Regla del proyecto de acá en adelante**: `query_test` no se vuelve a tocar salvo que se rehaga todo
 el proceso de selección desde cero. Ver la sección "Metodología dev/test/holdout" en `CLAUDE.md` para
@@ -158,9 +158,9 @@ python scripts/07_bootstrap_ci.py
 |---|---|
 | **Autora** | Ing. Sabrina Daiana Pryszczuk |
 | **Director** | Ing. Axel Alfredo Skrauba (DIEC-FI-UNaM) |
-| **Institución** | Carrera de Especialización en Inteligencia Artificial — Facultad de Ingeniería, Universidad de Buenos Aires (FI-UBA) |
+| **Institución** | Carrera de Especialización en Inteligencia Artificial, Facultad de Ingeniería, Universidad de Buenos Aires (FI-UBA) |
 
-📍 Ciudad de Oberá, Misiones, Argentina — 2026
+📍 Ciudad de Oberá, Misiones, Argentina, 2026
 
 ---
 

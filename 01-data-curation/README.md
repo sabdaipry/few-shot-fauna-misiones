@@ -6,7 +6,7 @@ Una herramienta de escritorio para auditar y curar visualmente datasets de imág
 
 ## Qué hace
 
-El curador embebe cada imagen del dataset con un modelo DINOv2 ViT-B/14 preentrenado, reduce los vectores de alta dimensionalidad a 2D con UMAP, y renderiza un gráfico de dispersión interactivo. Podés hacer clic en puntos individuales o trazar un lazo para seleccionar grupos de imágenes, previsualizarlas en la aplicación, y enviar imágenes de baja calidad o mal etiquetadas a una carpeta de descarte — todo registrado en un CSV para que la operación sea reversible.
+El curador embebe cada imagen del dataset con un modelo DINOv2 ViT-B/14 preentrenado, reduce los vectores de alta dimensionalidad a 2D con UMAP, y renderiza un gráfico de dispersión interactivo. Podés hacer clic en puntos individuales o trazar un lazo para seleccionar grupos de imágenes, previsualizarlas en la aplicación, y enviar imágenes de baja calidad o mal etiquetadas a una carpeta de descarte, todo registrado en un CSV para que la operación sea reversible.
 
 **Características**
 
@@ -49,7 +49,7 @@ pip install -r requirements.txt
 
 ## Uso
 
-### Paso 1 — Generar embeddings
+### Paso 1: Generar embeddings
 
 ```bash
 python scripts/generate_embeddings.py --dataset <ruta/a/imágenes>
@@ -57,7 +57,7 @@ python scripts/generate_embeddings.py --dataset <ruta/a/imágenes>
 
 | Argumento | Requerido | Por defecto | Descripción |
 |---|---|---|---|
-| `--dataset DIR` | sí | — | Directorio raíz de las imágenes a procesar |
+| `--dataset DIR` | sí | N/A | Directorio raíz de las imágenes a procesar |
 | `--output CSV` | no | valor de `DATA_FILE` en `config.py` | Ruta del CSV de salida |
 | `--batch-size N` | no | `8` | Tamaño del lote para embeddings |
 
@@ -72,7 +72,7 @@ python scripts/generate_embeddings.py \
 
 El script recorre el directorio de forma recursiva, extrae los embeddings DINOv2, ejecuta UMAP y escribe un CSV con las columnas `x`, `y`, `species_id`, `scientific_name`, `common_name`, `family`, `genus`, `user`, `filename`, `absolute_path`.
 
-### Paso 2 — Ejecutar la aplicación
+### Paso 2: Ejecutar la aplicación
 
 ```bash
 python main.py
@@ -132,6 +132,6 @@ La suite de tests cubre `DataManager`: carga del CSV, resumen global, filtrado p
 
 ## Roadmap
 
-- **i18n** — Las cadenas de la UI están actualmente en español; extraerlas para una internacionalización adecuada
-- **Tests adicionales** — Cobertura para las señales de `UMAPWidget` y el panel de estadísticas
-- **Selector de modelo en la GUI** — Permitir cambiar entre variantes de DINOv2 (ViT-S/14, ViT-L/14) sin editar la configuración
+- **i18n**: Las cadenas de la UI están actualmente en español; extraerlas para una internacionalización adecuada
+- **Tests adicionales**: Cobertura para las señales de `UMAPWidget` y el panel de estadísticas
+- **Selector de modelo en la GUI**: Permitir cambiar entre variantes de DINOv2 (ViT-S/14, ViT-L/14) sin editar la configuración
