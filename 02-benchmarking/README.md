@@ -11,7 +11,8 @@ El pipeline parte de un dataset de imágenes organizado taxonómicamente, extrae
 - Un índice del dataset (`dataset_index.csv`) con split galería/query por especie e IVC integrado.
 - Embeddings precalculados por backbone (`data/features/`).
 - Una tabla comparativa de métricas para las 209 combinaciones backbone × clasificador (19×11, incluyendo variantes DINO `_gap` y Faiss; la comparación principal reportada es 15×7=105) (`benchmark_summary.csv`).
-- Intervalos de confianza bootstrap al 95% estratificados por clase (`bootstrap_ci.csv`).
+- Intervalos de confianza bootstrap al 95% estratificados por clase (`bootstrap_ci.csv`), y desagregados por categoría de Índice de Valor de Conservación (IVC) (`ivc_bootstrap_ci.csv`).
+- Comparación de métricas de distancia para clasificación 1-NN (`distance_benchmark.csv`).
 - Mediciones de latencia, escalabilidad y comportamiento ante datos nuevos (incremental / outliers).
 - Un reporte HTML final con leaderboards, heatmaps, UMAPs, matrices de confusión y análisis por clase taxonómica.
 
@@ -46,7 +47,7 @@ pip install -r requirements.txt --ignore-installed torch
 ```
 02-benchmarking/
 ├── src/                  # Módulos reutilizables (lógica de negocio)
-├── scripts/              # Pipeline ejecutable, paso a paso (01 a 07)
+├── scripts/              # Pipeline ejecutable, paso a paso (01 a 09)
 │   └── helpers/          # Scripts auxiliares de mantenimiento
 ├── data/                 # Datos de entrada, intermedios y resultados
 │   ├── benchmark_results/    # CSVs de salida del benchmark (summary, predicciones, bootstrap CI)
@@ -62,7 +63,7 @@ pip install -r requirements.txt --ignore-installed torch
 | Carpeta | Contenido |
 |---|---|
 | `src/` | Configuración, extractores de embeddings, clasificadores, análisis, visualización y generación de reportes |
-| `scripts/` | Los 7 pasos del pipeline, numerados en orden de ejecución |
+| `scripts/` | Los 9 pasos del pipeline, numerados en orden de ejecución |
 | `scripts/helpers/` | Utilidades puntuales de mantenimiento de datos (no forman parte del pipeline principal) |
 | `data/` | Todos los datos del proyecto: índice, embeddings, resultados y reportes |
 | `logs/` | Logs estructurados generados por `src/utils/logger.py` en cada corrida |
@@ -132,6 +133,28 @@ python scripts/07_bootstrap_ci.py --iterations 1000 --seed 29 --confidence 0.95
 ```
 
 > ⚠️ Este script documenta explícitamente sus limitaciones metodológicas en su docstring (varianza solo del query set, comparaciones no apareadas, clases singleton, clasificadores correlacionados); vale la pena leerlas antes de citar los IC en el reporte académico.
+
+### `08_distance_benchmark.py`
+
+- **Qué hace:** compara 4 métricas de distancia (coseno, euclidiana, euclidiana L2-norm, Manhattan) para clasificación 1-NN, sobre los embeddings de gallery/query de 5 backbones (bioclip_v2, dinov3_small, dinov2_small, resnet50, convnextv2_tiny). Mide accuracy 1-NN y latencia de búsqueda por imagen para cada combinación backbone × métrica.
+- **Input:** `data/dataset_index.csv` + `data/features/<modelo>/` de los 5 backbones evaluados.
+- **Output:** `data/benchmark_results/distance_benchmark.csv`, `distance_distributions.npz` (distribuciones intra/inter-clase) y las figuras `distance_benchmark_accuracy.{svg,png}`, `distance_benchmark_latency.{svg,png}`, `distance_distributions_<backbone>.{svg,png}`.
+
+```bash
+python scripts/08_distance_benchmark.py
+```
+
+> Este es el benchmark que sustenta la elección de la métrica coseno (distancia coseno) para el pipeline de producción.
+
+### `09_ivc_bootstrap_ci.py`
+
+- **Qué hace:** desagrega el IC bootstrap al 95% (mismo esquema estratificado por especie que `07_bootstrap_ci.py`, reutilizado sin reimplementar) por categoría de Índice de Valor de Conservación (IVC), para los 15 backbones estándar sobre `query_dev`. Replica la metodología de la figura `07_ivc_ranking` del reporte: el "desempeño normalizado" por categoría es el promedio no ponderado de la accuracy de los 7 clasificadores clásicos, no la de un único clasificador. También reporta, sobre los datos crudos, la dispersión entre esos 7 clasificadores por categoría (mínimo, máximo, rango, desvío estándar).
+- **Input:** `data/benchmark_results/predictions_<modelo>.csv` de los 15 backbones estándar (excluye las 4 variantes `_gap`, que corren sobre el query set completo de 3674 imágenes en vez de `query_dev`, y no comparten índice/orden con el resto).
+- **Output:** `data/benchmark_results/ivc_bootstrap_ci.csv` y `.md` (tabla lista para pegar en el artículo).
+
+```bash
+python scripts/09_ivc_bootstrap_ci.py --iterations 1000 --seed 29 --confidence 0.95
+```
 
 ---
 

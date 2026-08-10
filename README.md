@@ -149,6 +149,8 @@ python scripts/06_generate_full_report.py
 python scripts/07_bootstrap_ci.py
 ```
 
+> Pasos adicionales de análisis puntual (no forman parte del pipeline reproducible base): `08_distance_benchmark.py` (comparación de métricas de distancia) y `09_ivc_bootstrap_ci.py` (IC bootstrap desagregado por categoría de Índice de Valor de Conservación). Ver detalle en el README de `02-benchmarking/`.
+
 ---
 
 ## 👥 Créditos

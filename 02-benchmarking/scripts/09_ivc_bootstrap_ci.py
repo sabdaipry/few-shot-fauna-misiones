@@ -13,8 +13,8 @@ categoría — no un único clasificador ni una accuracy pooleada sobre las fila
 Las 4 variantes _gap (dinov2_*_gap, dinov3_*_gap) quedan excluidas: sus
 predictions_*.csv tienen 3674 filas (query set completo, pre-separación
 dev/test) en vez de las 2572 de query_dev — no comparten índice/orden con el
-resto. Es la misma exclusión que ya aplica el resto del pipeline (ver
-02-benchmarking/CLAUDE.md).
+resto. Es la misma exclusión que ya aplica el resto del pipeline de
+benchmarking.
 
 Reutiliza la implementación de bootstrap estratificado por especie de
 07_bootstrap_ci.py (build_class_index_map, stratified_bootstrap_resample) sin
